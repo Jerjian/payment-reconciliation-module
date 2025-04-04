@@ -8,7 +8,7 @@ Base = declarative_base()
 class KrollPatient(Base):
     __tablename__ = 'kroll_patient'
     id = Column(Integer, primary_key=True, index=True, nullable=False, unique=True, autoincrement=True)
-    DocID = Column(Integer, ForeignKey('kroll_doctor.id'), nullable=True)       #Can patient have more than one doctor?
+    # DocID = Column(Integer, ForeignKey('kroll_doctor.id'), nullable=True)       #Can patient have more than one doctor?
     FamilyID = Column(Integer, nullable=True)
     Code = Column(String, nullable=True)           #varchar40
     LastName = Column(String, nullable=False)       #varchar25
@@ -94,8 +94,8 @@ class KrollPatient(Base):
     DefaultDeliveryRouteServiceId = Column(Integer, nullable=True)
     AddressVerificationFlags = Column(Integer, nullable=True)
 
-    patientLogistics = relationship('Patients', back_populates='krollPatient')
-    therapyLogistics = relationship('OpsTherapy', back_populates='krollPatient')
+    # patientLogistics = relationship('Patients', back_populates='krollPatient')
+    # therapyLogistics = relationship('OpsTherapy', back_populates='krollPatient')
 
 class KrollPatientPhone(Base):
     __tablename__ = 'kroll_patient_phone'
@@ -564,7 +564,7 @@ class KrollRxPrescription(Base):
     PatID = Column(Integer, ForeignKey('kroll_patient.id'), nullable=False)
     DrgID = Column(Integer, ForeignKey('kroll_drug.id'), nullable=True)
     MixID = Column(Integer, ForeignKey('kroll_drug_mix.id'), nullable=True)
-    DocID = Column(Integer, ForeignKey('kroll_doctor.id'), nullable=False)
+    # DocID = Column(Integer, ForeignKey('kroll_doctor.id'), nullable=False)
     OrigRxNum = Column(Integer, nullable=False)                         #int
     RxNum = Column(Integer, nullable=False, unique=True)                #int
     Init = Column(String, nullable=True)                                #varchar6

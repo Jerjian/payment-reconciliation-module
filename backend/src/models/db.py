@@ -853,6 +853,7 @@ class Payment(Base):
     __tablename__ = 'payments'
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     patient_id = Column(Integer, ForeignKey('kroll_patient.id'), nullable=False)
+    invoice_id = Column(Integer, ForeignKey('invoices.id'), nullable=False)
     amount = Column(Numeric(precision=10, scale=2), nullable=False)
     payment_date = Column(DateTime, default=datetime.now, nullable=False)
     payment_method = Column(String, nullable=False)  # credit, check, direct_deposit
@@ -871,7 +872,7 @@ class Invoice(Base):
     __tablename__ = 'invoices'
     id = Column(Integer, primary_key=True, index=True, autoincrement=True) # internal invoice ID
     patient_id = Column(Integer, ForeignKey('kroll_patient.id'), nullable=False)
-    rx_id = Column(Integer, ForeignKey('kroll_rx_prescription.id'), nullable=False)
+    rx_id = Column(Integer, ForeignKey('kroll_rx_prescription.id'), nullable=False, unique=True) # unique=True to prevent duplicate invoices for the same prescription
     invoice_date = Column(DateTime, default=datetime.now, nullable=False)
     due_date = Column(DateTime, nullable=False)
     description = Column(String, nullable=True)
@@ -880,7 +881,8 @@ class Invoice(Base):
     status = Column(String, default='pending')  # pending, paid, partial, overdue
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
-    insurance_covered_amount = Column(Numeric(precision=10, scale=2), default=0)
+    #Sum of all insurance covered amounts for the prescription (Invoice -> KrollRxPrescription -> kroll_rx_prescription_plan_adj)
+    insurance_covered_amount = Column(Numeric(precision=10, scale=2), default=0) 
     patient_portion = Column(Numeric(precision=10, scale=2), nullable=False)
     
     # Relationships
@@ -888,17 +890,17 @@ class Invoice(Base):
     prescription = relationship('KrollRxPrescription', backref='invoices')
 
     
-class PaymentInvoice(Base):
-    __tablename__ = 'payment_invoices'
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    payment_id = Column(Integer, ForeignKey('payments.id'), nullable=False)
-    invoice_id = Column(Integer, ForeignKey('invoices.id'), nullable=False)
-    amount_applied = Column(Numeric(precision=10, scale=2), nullable=False)
-    created_at = Column(DateTime, default=datetime.now)
+# class PaymentInvoice(Base):
+#     __tablename__ = 'payment_invoices'
+#     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+#     payment_id = Column(Integer, ForeignKey('payments.id'), nullable=False)
+#     invoice_id = Column(Integer, ForeignKey('invoices.id'), nullable=False)
+#     amount_applied = Column(Numeric(precision=10, scale=2), nullable=False)
+#     created_at = Column(DateTime, default=datetime.now)
     
-    # Relationships
-    payment = relationship('Payment', backref='payment_invoices')
-    invoice = relationship('Invoice', backref='payment_invoices')
+#     # Relationships
+#     payment = relationship('Payment', backref='payment_invoices')
+#     invoice = relationship('Invoice', backref='payment_invoices')
 
 class MonthlyStatement(Base):
     __tablename__ = 'monthly_statements'

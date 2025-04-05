@@ -864,13 +864,16 @@ class Payment(Base):
     # Relationships
     patient = relationship('KrollPatient', backref='payments')
 
+
 class Invoice(Base):
     __tablename__ = 'invoices'
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     patient_id = Column(Integer, ForeignKey('kroll_patient.id'), nullable=False)
+    rx_id = Column(Integer, ForeignKey('kroll_rx_prescription.id'), nullable=False)
     invoice_date = Column(DateTime, default=datetime.now, nullable=False)
     due_date = Column(DateTime, nullable=False)
-    total_amount = Column(Numeric(precision=10, scale=2), nullable=False)
+    description = Column(String, nullable=True)
+    amount = Column(Numeric(precision=10, scale=2), nullable=False)
     amount_paid = Column(Numeric(precision=10, scale=2), default=0)
     status = Column(String, default='pending')  # pending, paid, partial, overdue
     created_at = Column(DateTime, default=datetime.now)
@@ -878,18 +881,9 @@ class Invoice(Base):
     
     # Relationships
     patient = relationship('KrollPatient', backref='invoices')
-    invoice_items = relationship('InvoiceItem', backref='invoice')
+    prescription = relationship('KrollRxPrescription', backref='invoices')
 
-class InvoiceItem(Base):
-    __tablename__ = 'invoice_items'
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    invoice_id = Column(Integer, ForeignKey('invoices.id'), nullable=False)
-    rx_plan_adj_id = Column(Integer, ForeignKey('kroll_rx_prescription_plan_adj.id'), nullable=True)
-    description = Column(String, nullable=False)
-    amount = Column(Numeric(precision=10, scale=2), nullable=False)
-    created_at = Column(DateTime, default=datetime.now)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
-
+    
 class PaymentInvoice(Base):
     __tablename__ = 'payment_invoices'
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)

@@ -856,10 +856,12 @@ class Payment(Base):
     amount = Column(Numeric(precision=10, scale=2), nullable=False)
     payment_date = Column(DateTime, default=datetime.now, nullable=False)
     payment_method = Column(String, nullable=False)  # credit, check, direct_deposit
-    reference_number = Column(String, nullable=True)
+    reference_number = Column(String, nullable=True) # external bank/payment processor reference
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    transaction_status = Column(String, default='completed')  #  Track payment Status (pending, completed, failed)
+    external_transaction_id = Column(String, nullable=True)  # For bank reconciliation
     
     # Relationships
     patient = relationship('KrollPatient', backref='payments')
@@ -867,7 +869,7 @@ class Payment(Base):
 
 class Invoice(Base):
     __tablename__ = 'invoices'
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True) # internal invoice ID
     patient_id = Column(Integer, ForeignKey('kroll_patient.id'), nullable=False)
     rx_id = Column(Integer, ForeignKey('kroll_rx_prescription.id'), nullable=False)
     invoice_date = Column(DateTime, default=datetime.now, nullable=False)
@@ -878,6 +880,8 @@ class Invoice(Base):
     status = Column(String, default='pending')  # pending, paid, partial, overdue
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    insurance_covered_amount = Column(Numeric(precision=10, scale=2), default=0)
+    patient_portion = Column(Numeric(precision=10, scale=2), nullable=False)
     
     # Relationships
     patient = relationship('KrollPatient', backref='invoices')

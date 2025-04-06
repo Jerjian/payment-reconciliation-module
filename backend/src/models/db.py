@@ -94,8 +94,17 @@ class KrollPatient(Base):
     DefaultDeliveryRouteServiceId = Column(Integer, nullable=True)
     AddressVerificationFlags = Column(Integer, nullable=True)
 
-    # patientLogistics = relationship('Patients', back_populates='krollPatient')
-    # therapyLogistics = relationship('OpsTherapy', back_populates='krollPatient')
+    # Relationships
+    patient_phones = relationship("KrollPatientPhone", back_populates="patient")
+    patient_plans = relationship("KrollPatientPlan", back_populates="patient")
+    patient_coms = relationship("KrollPatientCom", back_populates="patient")
+    patient_cnds = relationship("KrollPatientCnd", back_populates="patient")
+    patient_algs = relationship("KrollPatientAlg", back_populates="patient")
+    prescriptions = relationship("KrollRxPrescription", back_populates="patient")
+    payments = relationship("Payment", back_populates="patient")
+    invoices = relationship("Invoice", back_populates="patient")
+    monthly_statements = relationship("MonthlyStatement", back_populates="patient")
+    financial_statements = relationship("FinancialStatement", back_populates="patient")
 
 class KrollPatientPhone(Base):
     __tablename__ = 'kroll_patient_phone'
@@ -109,6 +118,9 @@ class KrollPatientPhone(Base):
     status = Column(Enum, nullable=True)                #smallint
     DateCreated = Column(DateTime, default=datetime.now)                            #datetime
     DateChanged = Column(DateTime, default=datetime.now, onupdate=datetime.now)     #datetime
+    
+    # Relationships
+    patient = relationship("KrollPatient", back_populates="patient_phones")
 
 class KrollPatientPlan(Base):
     __tablename__ = 'kroll_patient_plan'
@@ -142,6 +154,12 @@ class KrollPatientPlan(Base):
     Deleted = Column(Boolean, nullable=True)
     createdAt = Column(DateTime)
     updatedAt = Column(DateTime)
+    
+    # Relationships
+    patient = relationship("KrollPatient", back_populates="patient_plans")
+    plan = relationship("KrollPlan", back_populates="patient_plans")
+    subplan = relationship("KrollPlanSub", back_populates="patient_plans")
+    prescription_plans = relationship("KrollRxPrescriptionPlan", back_populates="patient_plan")
 
 class KrollPlanSub(Base):
     __tablename__ = 'kroll_plan_sub'
@@ -204,6 +222,10 @@ class KrollPlanSub(Base):
     GLAccountNumber = Column(String, nullable=True)     #varchar20
     createdAt = Column(DateTime)
     updatedAt = Column(DateTime)
+    
+    # Relationships
+    plan = relationship("KrollPlan", back_populates="subplans")
+    patient_plans = relationship("KrollPatientPlan", back_populates="subplan")
 
 class KrollPlan(Base):
     __tablename__ = 'kroll_plan'
@@ -253,6 +275,10 @@ class KrollPlan(Base):
     CentralMaintFieldMask2 = Column(Integer, nullable=True) #int
     createdAt = Column(DateTime)
     updatedAt = Column(DateTime)
+    
+    # Relationships
+    subplans = relationship("KrollPlanSub", back_populates="plan")
+    patient_plans = relationship("KrollPatientPlan", back_populates="plan")
 
 class KrollPatientCom(Base):
     __tablename__ = 'kroll_patient_com'
@@ -272,6 +298,9 @@ class KrollPatientCom(Base):
     CommentPlainText = Column(String, nullable=True)    #varchar(max)
     createdAt = Column(DateTime)
     updatedAt = Column(DateTime)
+    
+    # Relationships
+    patient = relationship("KrollPatient", back_populates="patient_coms")
 
 class KrollPatientCnd(Base):
     __tablename__ = 'kroll_patient_cnd'
@@ -290,6 +319,9 @@ class KrollPatientCnd(Base):
     CeRxCodeSystem = Column(String, nullable=True)      #varchar200
     createdAt = Column(DateTime)
     updatedAt = Column(DateTime)
+    
+    # Relationships
+    patient = relationship("KrollPatient", back_populates="patient_cnds")
 
 class KrollPatientAlg(Base):
     __tablename__ = 'kroll_patient_alg'
@@ -304,6 +336,9 @@ class KrollPatientAlg(Base):
     CodeType = Column(Integer, nullable=False)      #int
     createdAt = Column(DateTime)
     updatedAt = Column(DateTime)
+    
+    # Relationships
+    patient = relationship("KrollPatient", back_populates="patient_algs")
 
 class KrollDrug(Base):
     __tablename__ = 'kroll_drug'
@@ -390,6 +425,12 @@ class KrollDrug(Base):
     RefillReminderDefault = Column(Integer, nullable=True)  #int
     VaccineCode = Column(String, nullable=True)             #varchar30
     VaccineCodeType = Column(Integer, nullable=True)        #int
+    createdAt = Column(DateTime)
+    updatedAt = Column(DateTime)
+    
+    # Relationships
+    drug_packs = relationship("KrollDrugPack", back_populates="drug")
+    prescriptions = relationship("KrollRxPrescription", back_populates="drug")
 
 class KrollDrugMix(Base):
     __tablename__ = 'kroll_drug_mix'
@@ -442,6 +483,9 @@ class KrollDrugMix(Base):
     RefillReminderDefault = Column(Integer)                 #int
     createdAt = Column(DateTime)
     updatedAt = Column(DateTime)
+    
+    # Relationships
+    prescriptions = relationship("KrollRxPrescription", back_populates="drug_mix")
 
 class KrollDrugPack(Base):
     __tablename__ = 'kroll_drug_pack'
@@ -535,6 +579,10 @@ class KrollDrugPack(Base):
     MarkupPercent = Column(Numeric, nullable=True)                  #numeric(9,3)
     createdAt = Column(DateTime)
     updatedAt = Column(DateTime)
+    
+    # Relationships
+    drug = relationship("KrollDrug", back_populates="drug_packs")
+    inventory_history = relationship("KrollDrugPackInvHist", back_populates="drug_pack")
 
 class KrollDrugPackInvHist(Base):
     __tablename__ = 'kroll_drug_pack_inv_hist'
@@ -557,6 +605,9 @@ class KrollDrugPackInvHist(Base):
     UserId = Column(Integer, nullable=True)                       #int
     createdAt = Column(DateTime)
     updatedAt = Column(DateTime)
+    
+    # Relationships
+    drug_pack = relationship("KrollDrugPack", back_populates="inventory_history")
 
 class KrollRxPrescription(Base):
     __tablename__ = 'kroll_rx_prescription'
@@ -745,7 +796,15 @@ class KrollRxPrescription(Base):
     CFRefusalReason = Column(String, nullable=True)
     createdAt = Column(DateTime)
     updatedAt = Column(DateTime)
+    
+    # Relationships
+    patient = relationship("KrollPatient", back_populates="prescriptions")
+    drug = relationship("KrollDrug", back_populates="prescriptions")
+    drug_mix = relationship("KrollDrugMix", back_populates="prescriptions")
+    prescription_plans = relationship("KrollRxPrescriptionPlan", back_populates="prescription")
+    invoice = relationship("Invoice", back_populates="prescription", uselist=False)
 
+    # Unique constraint for RxNum to prevent duplicate prescriptions
     __table_args__ = (
         UniqueConstraint('RxNum', name='uq_kroll_rx_prescription_rxnum'),
     )
@@ -799,7 +858,12 @@ class KrollRxPrescriptionPlan(Base):
     InterventionsOverride = Column(Boolean, nullable=True)
     createdAt = Column(DateTime)
     updatedAt = Column(DateTime)
-
+    
+    # Relationships
+    prescription = relationship("KrollRxPrescription", back_populates="prescription_plans")
+    patient_plan = relationship("KrollPatientPlan", back_populates="prescription_plans")
+    plan_adjustments = relationship("KrollRxPrescriptionPlanAdj", back_populates="prescription_plan")
+    
 class KrollRxPrescriptionPlanAdj(Base):
     __tablename__ = 'kroll_rx_prescription_plan_adj'
     id = Column(Integer, primary_key=True, index=True, nullable=False, unique=True, autoincrement=True)
@@ -848,85 +912,81 @@ class KrollRxPrescriptionPlanAdj(Base):
     CoInsurance = Column(Numeric, nullable=False)
     createdAt = Column(DateTime)
     updatedAt = Column(DateTime)
+    
+    # Relationships
+    prescription_plan = relationship("KrollRxPrescriptionPlan", back_populates="plan_adjustments")
 
 class Payment(Base):
     __tablename__ = 'payments'
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    patient_id = Column(Integer, ForeignKey('kroll_patient.id'), nullable=False)
-    invoice_id = Column(Integer, ForeignKey('invoices.id'), nullable=False)
-    amount = Column(Numeric(precision=10, scale=2), nullable=False)
-    payment_date = Column(DateTime, default=datetime.now, nullable=False)
-    payment_method = Column(String, nullable=False)  # credit, check, direct_deposit
-    reference_number = Column(String, nullable=True) # external bank/payment processor reference
-    notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.now)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
-    transaction_status = Column(String, default='completed')  #  Track payment Status (pending, completed, failed)
-    external_transaction_id = Column(String, nullable=True)  # For bank reconciliation
+    PatientId = Column(Integer, ForeignKey('kroll_patient.id'), nullable=False)
+    InvoiceId = Column(Integer, ForeignKey('invoices.id'), nullable=False)
+    Amount = Column(Numeric(precision=10, scale=2), nullable=False)
+    PaymentDate = Column(DateTime, default=datetime.now, nullable=False)
+    PaymentMethod = Column(String, nullable=False)  # credit, check, direct_deposit
+    ReferenceNumber = Column(String, nullable=True) # external bank/payment processor reference
+    Notes = Column(Text, nullable=True)
+    TransactionStatus = Column(String, default='completed')  #  Track payment Status (pending, completed, failed)
+    ExternalTransactionId = Column(String, nullable=True)  # For bank reconciliation
+    createdAt = Column(DateTime, default=datetime.now)
+    updatedAt = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     
     # Relationships
-    patient = relationship('KrollPatient', backref='payments')
-
+    patient = relationship('KrollPatient', back_populates='payments')
+    invoice = relationship('Invoice', back_populates='payments')
 
 class Invoice(Base):
     __tablename__ = 'invoices'
     id = Column(Integer, primary_key=True, index=True, autoincrement=True) # internal invoice ID
-    patient_id = Column(Integer, ForeignKey('kroll_patient.id'), nullable=False)
-    rx_id = Column(Integer, ForeignKey('kroll_rx_prescription.id'), nullable=False, unique=True) # unique=True to prevent duplicate invoices for the same prescription
-    invoice_date = Column(DateTime, default=datetime.now, nullable=False)
-    due_date = Column(DateTime, nullable=False)
-    description = Column(String, nullable=True)
-    amount = Column(Numeric(precision=10, scale=2), nullable=False)
-    amount_paid = Column(Numeric(precision=10, scale=2), default=0)
-    status = Column(String, default='pending')  # pending, paid, partial, overdue
-    created_at = Column(DateTime, default=datetime.now)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    PatientId = Column(Integer, ForeignKey('kroll_patient.id'), nullable=False)
+    RxId = Column(Integer, ForeignKey('kroll_rx_prescription.id'), nullable=False, unique=True) # unique=True to prevent duplicate invoices for the same prescription
+    InvoiceDate = Column(DateTime, default=datetime.now, nullable=False)
+    DueDate = Column(DateTime, nullable=False)
+    Description = Column(String, nullable=True)
+    Amount = Column(Numeric(precision=10, scale=2), nullable=False) #Total amount of the invoice
+    AmountPaid = Column(Numeric(precision=10, scale=2), default=0) #Amount paid towards the invoice
     #Sum of all insurance covered amounts for the prescription (Invoice -> KrollRxPrescription -> kroll_rx_prescription_plan_adj)
-    insurance_covered_amount = Column(Numeric(precision=10, scale=2), default=0) 
-    patient_portion = Column(Numeric(precision=10, scale=2), nullable=False)
+    InsuranceCoveredAmount = Column(Numeric(precision=10, scale=2), default=0) #Sum of all insurance covered amounts for the prescription
+    PatientPortion = Column(Numeric(precision=10, scale=2), nullable=False) #Sum of all patient portions for the prescription
+
+    Status = Column(String, default='pending')  # pending, paid, partial, overdue
+    createdAt = Column(DateTime, default=datetime.now)
+    updatedAt = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     
     # Relationships
-    patient = relationship('KrollPatient', backref='invoices')
-    prescription = relationship('KrollRxPrescription', backref='invoices')
-
-    
-# class PaymentInvoice(Base):
-#     __tablename__ = 'payment_invoices'
-#     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-#     payment_id = Column(Integer, ForeignKey('payments.id'), nullable=False)
-#     invoice_id = Column(Integer, ForeignKey('invoices.id'), nullable=False)
-#     amount_applied = Column(Numeric(precision=10, scale=2), nullable=False)
-#     created_at = Column(DateTime, default=datetime.now)
-    
-#     # Relationships
-#     payment = relationship('Payment', backref='payment_invoices')
-#     invoice = relationship('Invoice', backref='payment_invoices')
+    patient = relationship('KrollPatient', back_populates='invoices')
+    prescription = relationship('KrollRxPrescription', back_populates='invoice', uselist=False)
+    payments = relationship('Payment', back_populates='invoice')
 
 class MonthlyStatement(Base):
     __tablename__ = 'monthly_statements'
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    patient_id = Column(Integer, ForeignKey('kroll_patient.id'), nullable=False)
-    statement_date = Column(DateTime, nullable=False)
-    start_date = Column(DateTime, nullable=False)
-    end_date = Column(DateTime, nullable=False)
-    opening_balance = Column(Numeric(precision=10, scale=2), nullable=False)
-    total_charges = Column(Numeric(precision=10, scale=2), nullable=False)
-    total_payments = Column(Numeric(precision=10, scale=2), nullable=False)
-    closing_balance = Column(Numeric(precision=10, scale=2), nullable=False)
-    created_at = Column(DateTime, default=datetime.now)
+    PatientId = Column(Integer, ForeignKey('kroll_patient.id'), nullable=False)
+    StatementDate = Column(DateTime, nullable=False)
+    StartDate = Column(DateTime, nullable=False)
+    EndDate = Column(DateTime, nullable=False)
+    OpeningBalance = Column(Numeric(precision=10, scale=2), nullable=False)
+    TotalCharges = Column(Numeric(precision=10, scale=2), nullable=False)
+    TotalPayments = Column(Numeric(precision=10, scale=2), nullable=False)
+    ClosingBalance = Column(Numeric(precision=10, scale=2), nullable=False)
+    createdAt = Column(DateTime, default=datetime.now)
     
     # Relationships
-    patient = relationship('KrollPatient', backref='monthly_statements')
+    patient = relationship('KrollPatient', back_populates='monthly_statements')
 
 class FinancialStatement(Base):
     __tablename__ = 'financial_statements'
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    statement_date = Column(DateTime, nullable=False)
-    start_date = Column(DateTime, nullable=False)
-    end_date = Column(DateTime, nullable=False)
-    total_revenue = Column(Numeric(precision=12, scale=2), nullable=False)
-    insurance_payments = Column(Numeric(precision=12, scale=2), nullable=False)
-    patient_payments = Column(Numeric(precision=12, scale=2), nullable=False)
-    outstanding_balance = Column(Numeric(precision=12, scale=2), nullable=False)
-    created_at = Column(DateTime, default=datetime.now)
+    PatientId = Column(Integer, ForeignKey('kroll_patient.id'), nullable=False)
+    StatementDate = Column(DateTime, nullable=False)
+    StartDate = Column(DateTime, nullable=False)
+    EndDate = Column(DateTime, nullable=False)
+    TotalRevenue = Column(Numeric(precision=12, scale=2), nullable=False)
+    InsurancePayments = Column(Numeric(precision=12, scale=2), nullable=False)
+    PatientPayments = Column(Numeric(precision=12, scale=2), nullable=False)
+    OutstandingBalance = Column(Numeric(precision=12, scale=2), nullable=False)
+    createdAt = Column(DateTime, default=datetime.now)
+    
+    # Relationships
+    patient = relationship('KrollPatient', back_populates='financial_statements')
 

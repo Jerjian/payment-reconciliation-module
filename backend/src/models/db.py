@@ -104,7 +104,6 @@ class KrollPatient(Base):
     payments = relationship("Payment", back_populates="patient")
     invoices = relationship("Invoice", back_populates="patient")
     monthly_statements = relationship("MonthlyStatement", back_populates="patient")
-    financial_statements = relationship("FinancialStatement", back_populates="patient")
 
 class KrollPatientPhone(Base):
     __tablename__ = 'kroll_patient_phone'
@@ -928,8 +927,8 @@ class Payment(Base):
     Notes = Column(Text, nullable=True)
     TransactionStatus = Column(String, default='completed')  #  Track payment Status (pending, completed, failed)
     ExternalTransactionId = Column(String, nullable=True)  # For bank reconciliation
-    createdAt = Column(DateTime, default=datetime.now)
-    updatedAt = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    createdAt = Column(DateTime)
+    updatedAt = Column(DateTime)
     
     # Relationships
     patient = relationship('KrollPatient', back_populates='payments')
@@ -950,8 +949,8 @@ class Invoice(Base):
     PatientPortion = Column(Numeric(precision=10, scale=2), nullable=False) #Sum of all patient portions for the prescription
 
     Status = Column(String, default='pending')  # pending, paid, partial, overdue
-    createdAt = Column(DateTime, default=datetime.now)
-    updatedAt = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    createdAt = Column(DateTime)
+    updatedAt = Column(DateTime)
     
     # Relationships
     patient = relationship('KrollPatient', back_populates='invoices')
@@ -969,24 +968,34 @@ class MonthlyStatement(Base):
     TotalCharges = Column(Numeric(precision=10, scale=2), nullable=False)
     TotalPayments = Column(Numeric(precision=10, scale=2), nullable=False)
     ClosingBalance = Column(Numeric(precision=10, scale=2), nullable=False)
-    createdAt = Column(DateTime, default=datetime.now)
+    createdAt = Column(DateTime)
     
     # Relationships
     patient = relationship('KrollPatient', back_populates='monthly_statements')
 
+
 class FinancialStatement(Base):
     __tablename__ = 'financial_statements'
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    PatientId = Column(Integer, ForeignKey('kroll_patient.id'), nullable=False)
-    StatementDate = Column(DateTime, nullable=False)
+    # --- Period Definition ---
+    StatementDate = Column(DateTime, nullable=False, default=datetime.now)
     StartDate = Column(DateTime, nullable=False)
     EndDate = Column(DateTime, nullable=False)
-    TotalRevenue = Column(Numeric(precision=12, scale=2), nullable=False)
-    InsurancePayments = Column(Numeric(precision=12, scale=2), nullable=False)
-    PatientPayments = Column(Numeric(precision=12, scale=2), nullable=False)
-    OutstandingBalance = Column(Numeric(precision=12, scale=2), nullable=False)
-    createdAt = Column(DateTime, default=datetime.now)
-    
-    # Relationships
-    patient = relationship('KrollPatient', back_populates='financial_statements')
 
+    # --- Aggregated Financial Data ---
+    # Total calculated revenue during the specified period (StartDate to EndDate)
+    # (Calculation logic depends on business rules: e.g., sum of Invoice.Amount?)
+    TotalRevenue = Column(Numeric(precision=12, scale=2), nullable=False)
+    # Total payments received directly from insurance plans during the period
+    # (Calculation logic: e.g., sum from Kroll adjudication data?)
+    InsurancePayments = Column(Numeric(precision=12, scale=2), nullable=False)
+    # Total payments received directly from patients during the period
+    # (Calculation logic: e.g., sum of Payment.Amount?)
+    PatientPayments = Column(Numeric(precision=12, scale=2), nullable=False)
+    # Represents the overall outstanding accounts receivable balance at the EndDate,
+    # or perhaps Net Income for the period? The exact meaning should be clearly defined
+    # based on business requirements.
+    OutstandingBalance = Column(Numeric(precision=12, scale=2), nullable=False)
+    # --- Audit Timestamp ---
+    # When this summary row was created in the database
+    createdAt = Column(DateTime, default=datetime.now)

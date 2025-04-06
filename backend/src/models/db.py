@@ -925,7 +925,7 @@ class Payment(Base):
     PaymentMethod = Column(String, nullable=False)  # credit, check, direct_deposit
     ReferenceNumber = Column(String, nullable=True) # external bank/payment processor reference
     Notes = Column(Text, nullable=True)
-    TransactionStatus = Column(String, default='completed')  #  Track payment Status (pending, completed, failed)
+    TransactionStatus = Column(String, default='completed', nullable=False)  #  Track payment Status (pending, completed, failed)
     ExternalTransactionId = Column(String, nullable=True)  # For bank reconciliation
     createdAt = Column(DateTime)
     updatedAt = Column(DateTime)

@@ -114,7 +114,7 @@ class KrollPatientPhone(Base):
     Extension = Column(String, nullable=True)           #varchar8
     LongDistance = Column(Boolean, nullable=False)      #bit
     Type = Column(SmallInteger, nullable=False, default=0)         #smallint
-    status = Column(Enum('active', 'inactive'), nullable=True)                #smallint
+    status = Column(Enum('active', 'inactive', name='kroll_patient_phone_status'), nullable=True)
     DateCreated = Column(DateTime, default=datetime.now)                            #datetime
     DateChanged = Column(DateTime, default=datetime.now, onupdate=datetime.now)     #datetime
     

@@ -415,7 +415,7 @@ module.exports = (sequelize, DataTypes) => {
     },
     {
       tableName: "kroll_patient",
-      timestamps: false, // Match SQLAlchemy model (no createdAt/updatedAt)
+      timestamps: true,
     }
   );
 

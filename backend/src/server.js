@@ -13,6 +13,7 @@ app.use(express.json());
 // Import Routes
 const patientRoutes = require("./routes/patientRoutes");
 const paymentRoutes = require("./routes/paymentRoutes"); // Import payment routes
+const statementRoutes = require("./routes/statementRoutes"); // Import statement routes
 // TODO: Import other routes (e.g., invoiceRoutes) when created
 
 // Basic Route for testing
@@ -23,6 +24,7 @@ app.get("/", (req, res) => {
 // Use API routes
 app.use("/api/patients", patientRoutes);
 app.use("/api/payments", paymentRoutes); // Use payment routes
+app.use("/api/statements", statementRoutes); // Use statement routes
 // TODO: Add other API routes here (e.g., app.use('/api/invoices', invoiceRoutes);)
 
 // Start the server after connecting to the database

@@ -1,5 +1,6 @@
 const db = require("../models");
 const { Payment, Invoice } = db;
+const { Op } = require("sequelize"); // Import Op for summation
 
 // Create a new payment record
 exports.createPayment = async (req, res) => {
@@ -14,12 +15,13 @@ exports.createPayment = async (req, res) => {
 
   // Basic Validation
   if (!invoiceId || !amount || !paymentDate || !paymentMethod) {
-    return res
-      .status(400)
-      .json({
-        message:
-          "Missing required payment fields: invoiceId, amount, paymentDate, paymentMethod.",
-      });
+    return res.status(400).json({
+      message:
+        "Missing required payment fields: invoiceId, amount, paymentDate, paymentMethod.",
+    });
+  }
+  if (isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+    return res.status(400).json({ message: "Invalid amount format or value." });
   }
 
   const transaction = await db.sequelize.transaction(); // Start a transaction
@@ -49,25 +51,45 @@ exports.createPayment = async (req, res) => {
       { transaction }
     );
 
-    // 3. OPTIONAL BUT RECOMMENDED: Update the Invoice's AmountPaid
-    // It's often better to calculate AmountPaid on the fly when reading,
-    // but if you have a denormalized AmountPaid field, update it here.
-    // If your Invoice model has AmountPaid, uncomment and adjust:
-    /*
-    const newAmountPaid = parseFloat(invoice.AmountPaid || 0) + parseFloat(amount);
-    await Invoice.update(
-        { AmountPaid: newAmountPaid.toFixed(2) },
-        { where: { id: invoiceId }, transaction }
-    );
-    */
+    // 3. Update Invoice AmountPaid and Status
+    // Sum all completed payments for this invoice *within the transaction*
+    const paymentSumResult = await Payment.findOne({
+      attributes: [
+        [db.sequelize.fn("SUM", db.sequelize.col("Amount")), "totalPaid"],
+      ],
+      where: {
+        InvoiceId: invoiceId,
+        TransactionStatus: "completed", // Only sum completed payments
+      },
+      raw: true, // Get plain data object
+      transaction, // Include in the transaction for consistency
+    });
 
-    // TODO: Potentially update Invoice status (e.g., to 'paid' or 'partially_paid')
-    // based on the new payment and patient portion.
-    // This requires fetching all payments for the invoice again to be accurate.
+    const totalPaid = parseFloat(paymentSumResult.totalPaid || 0);
+    const patientPortion = parseFloat(invoice.PatientPortion);
+    let newStatus = invoice.Status;
+
+    if (totalPaid >= patientPortion) {
+      newStatus = "paid";
+    } else if (totalPaid > 0) {
+      newStatus = "partially_paid";
+    } else {
+      newStatus = "pending";
+    }
+    // TODO: Add logic for 'overdue' status based on DueDate if needed
+
+    await Invoice.update(
+      { AmountPaid: totalPaid.toFixed(2), Status: newStatus },
+      { where: { id: invoiceId }, transaction }
+    );
 
     await transaction.commit(); // Commit the transaction
 
-    res.status(201).json(newPayment);
+    // Fetch the newly created payment again *outside* the transaction to return fresh data
+    // (Alternatively, return the data from `newPayment` if it's sufficient)
+    const createdPayment = await Payment.findByPk(newPayment.id);
+
+    res.status(201).json(createdPayment);
   } catch (error) {
     await transaction.rollback(); // Rollback on error
     console.error("Error creating payment:", error);

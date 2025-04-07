@@ -47,7 +47,7 @@ exports.getPatientById = async (req, res) => {
   }
 };
 
-// Get Patient Account Statement (Prescriptions, Balances)
+// Get Patient Account Statement (Prescriptions, Balances) for image 1
 exports.getPatientAccountStatement = async (req, res) => {
   try {
     const patientId = parseInt(req.params.id, 10);
@@ -239,7 +239,7 @@ exports.getPrescriptionDetails = async (req, res) => {
         amount: parseFloat(p.Amount).toFixed(2),
         paymentMethod: p.PaymentMethod,
         referenceNumber: p.ReferenceNumber,
-        refund: false, // TODO: How is refund status stored in Payment model? Assuming false for now.
+        refund: p.isRefund, // Use the isRefund flag from the Payment record
         paymentPlan: null, // No plan for direct patient payments
         id: `payment-${p.id}`,
       });

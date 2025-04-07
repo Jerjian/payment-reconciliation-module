@@ -11,6 +11,7 @@ exports.createPayment = async (req, res) => {
     paymentMethod,
     referenceNumber,
     notes,
+    isRefund,
   } = req.body;
 
   // Basic Validation
@@ -20,7 +21,8 @@ exports.createPayment = async (req, res) => {
         "Missing required payment fields: invoiceId, amount, paymentDate, paymentMethod.",
     });
   }
-  if (isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+  const absAmount = Math.abs(parseFloat(amount));
+  if (isNaN(absAmount) || absAmount <= 0) {
     return res.status(400).json({ message: "Invalid amount format or value." });
   }
 
@@ -41,31 +43,35 @@ exports.createPayment = async (req, res) => {
       {
         InvoiceId: invoiceId,
         PatientId: invoice.PatientId, // Get PatientId from the associated invoice
-        Amount: amount,
+        Amount: absAmount,
         PaymentDate: paymentDate,
         PaymentMethod: paymentMethod,
         ReferenceNumber: referenceNumber, // Optional
         Notes: notes, // Optional
         TransactionStatus: "completed", // Assuming direct manual entries are completed
+        isRefund: !!isRefund,
       },
       { transaction }
     );
 
     // 3. Update Invoice AmountPaid and Status
-    // Sum all completed payments for this invoice *within the transaction*
-    const paymentSumResult = await Payment.findOne({
-      attributes: [
-        [db.sequelize.fn("SUM", db.sequelize.col("Amount")), "totalPaid"],
-      ],
+    // Sum payments considering refunds
+    const paymentSumResult = await Payment.findAll({
+      attributes: ["Amount", "isRefund"],
       where: {
         InvoiceId: invoiceId,
-        TransactionStatus: "completed", // Only sum completed payments
+        TransactionStatus: "completed",
       },
-      raw: true, // Get plain data object
-      transaction, // Include in the transaction for consistency
+      raw: true,
+      transaction,
     });
 
-    const totalPaid = parseFloat(paymentSumResult.totalPaid || 0);
+    // Calculate net amount paid (payments - refunds)
+    const totalPaid = paymentSumResult.reduce((sum, p) => {
+      const paymentAmount = parseFloat(p.Amount || 0);
+      return sum + (p.isRefund ? -paymentAmount : paymentAmount);
+    }, 0);
+
     const patientPortion = parseFloat(invoice.PatientPortion);
     let newStatus = invoice.Status;
 
@@ -96,5 +102,126 @@ exports.createPayment = async (req, res) => {
     res
       .status(500)
       .json({ message: "Error creating payment", error: error.message });
+  }
+};
+
+// Update an existing payment record
+exports.updatePayment = async (req, res) => {
+  const paymentId = parseInt(req.params.paymentId, 10);
+  const {
+    amount,
+    paymentDate,
+    paymentMethod,
+    referenceNumber,
+    notes,
+    isRefund,
+  } = req.body;
+
+  // Basic Validation
+  if (isNaN(paymentId)) {
+    return res.status(400).json({ message: "Invalid payment ID format." });
+  }
+  // Validate required fields for update (can be less strict than create if needed)
+  if (
+    amount === undefined &&
+    paymentDate === undefined &&
+    paymentMethod === undefined &&
+    isRefund === undefined
+  ) {
+    return res.status(400).json({ message: "No update fields provided." });
+  }
+  // Validate amount if provided
+  let absAmount;
+  if (amount !== undefined) {
+    absAmount = Math.abs(parseFloat(amount));
+    if (isNaN(absAmount) || absAmount <= 0) {
+      return res
+        .status(400)
+        .json({ message: "Invalid amount format or value." });
+    }
+  }
+
+  const transaction = await db.sequelize.transaction(); // Start a transaction
+
+  try {
+    // 1. Find the existing Payment
+    const payment = await Payment.findByPk(paymentId, { transaction });
+    if (!payment) {
+      await transaction.rollback();
+      return res
+        .status(404)
+        .json({ message: `Payment with ID ${paymentId} not found.` });
+    }
+
+    // Store the original invoiceId before potential update
+    const originalInvoiceId = payment.InvoiceId;
+
+    // 2. Update the Payment record fields selectively
+    if (absAmount !== undefined) payment.Amount = absAmount;
+    if (paymentDate !== undefined) payment.PaymentDate = paymentDate;
+    if (paymentMethod !== undefined) payment.PaymentMethod = paymentMethod;
+    if (referenceNumber !== undefined)
+      payment.ReferenceNumber = referenceNumber; // Allow setting to null/empty
+    if (notes !== undefined) payment.Notes = notes; // Allow setting to null/empty
+    if (isRefund !== undefined) payment.isRefund = !!isRefund;
+    // Note: We generally don't allow changing InvoiceId or PatientId via update
+
+    await payment.save({ transaction }); // Save the changes to the payment record
+
+    // 3. Recalculate and Update the associated Invoice AmountPaid and Status
+    // Use the originalInvoiceId to ensure we update the correct invoice
+    const paymentSumResult = await Payment.findAll({
+      attributes: ["Amount", "isRefund"],
+      where: {
+        InvoiceId: originalInvoiceId,
+        TransactionStatus: "completed",
+      },
+      raw: true,
+      transaction,
+    });
+
+    const totalPaid = paymentSumResult.reduce((sum, p) => {
+      const paymentAmount = parseFloat(p.Amount || 0);
+      return sum + (p.isRefund ? -paymentAmount : paymentAmount);
+    }, 0);
+
+    // Fetch the associated invoice again to get its patient portion
+    const invoice = await Invoice.findByPk(originalInvoiceId, { transaction });
+    if (!invoice) {
+      // This shouldn't happen if the payment existed, but handle defensively
+      await transaction.rollback();
+      return res.status(500).json({
+        message: `Could not find associated invoice ID ${originalInvoiceId}. Data might be inconsistent.`,
+      });
+    }
+
+    const patientPortion = parseFloat(invoice.PatientPortion);
+    let newStatus = invoice.Status;
+
+    if (totalPaid >= patientPortion) {
+      newStatus = "paid";
+    } else if (totalPaid > 0) {
+      newStatus = "partially_paid";
+    } else {
+      newStatus = "pending";
+    }
+
+    await Invoice.update(
+      { AmountPaid: totalPaid.toFixed(2), Status: newStatus },
+      { where: { id: originalInvoiceId }, transaction }
+    );
+
+    await transaction.commit(); // Commit the transaction
+
+    // Fetch the updated payment record again to return the final state
+    const updatedPayment = await Payment.findByPk(paymentId);
+
+    res.status(200).json(updatedPayment);
+  } catch (error) {
+    await transaction.rollback(); // Rollback on error
+    console.error("Error updating payment:", error);
+    res
+      .status(500)
+      .json({ message: "Error updating payment", error: error.message });
   }
 };

@@ -60,6 +60,11 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
+      isRefund: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
       // Sequelize handles createdAt and updatedAt automatically if timestamps: true
     },
     {

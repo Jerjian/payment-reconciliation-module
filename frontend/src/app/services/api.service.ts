@@ -4,6 +4,16 @@ import { Observable } from 'rxjs';
 
 // Define interfaces for the expected API response structure
 // (These should match the structure returned by your backend)
+
+// Interface for basic patient list item
+export interface PatientListItem {
+  id: number;
+  FirstName: string;
+  LastName: string;
+  Code: string; // Assuming 'Code' is the Patient ID from KrollPatient
+  // Add other relevant fields for the list if needed (e.g., Birthday, Prov)
+}
+
 export interface PatientDetails {
   id: number;
   FirstName: string;
@@ -47,6 +57,11 @@ export class ApiService {
     return this.http.get<PatientAccountStatement>(
       `${this.apiUrl}/patients/${patientId}/account-statement`
     );
+  }
+
+  // Method to get all patients
+  getAllPatients(): Observable<PatientListItem[]> {
+    return this.http.get<PatientListItem[]>(`${this.apiUrl}/patients`);
   }
 
   // --- Add other API methods here later ---

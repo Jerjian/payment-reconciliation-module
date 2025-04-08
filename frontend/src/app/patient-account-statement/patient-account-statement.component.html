@@ -1,7 +1,9 @@
 <div class="container">
   <!-- Header with Back Button and Title (Mimicking image structure) -->
   <div class="page-header">
-    <button class="back-button" title="Back">&#x2190;</button>
+    <button class="back-button" title="Back" (click)="goBack()">
+      &#x2190;
+    </button>
     <!-- Simple back arrow -->
     <h1 *ngIf="viewModel$ | async as vm">
       {{ vm?.patientDetails?.FirstName }} {{ vm?.patientDetails?.LastName }}
@@ -103,10 +105,11 @@
         <!-- Export and Search controls -->
         <div class="actions">
           <!-- Export button moved before search -->
+          <!-- 
           <button class="export-button">
             <span class="icon">&#x21E9;</span> Export
-            <!-- Export icon -->
-          </button>
+          </button> 
+          -->
           <div class="search-container">
             <input
               type="search"
@@ -114,8 +117,7 @@
               [ngModel]="searchTerm$ | async"
               (ngModelChange)="onSearchTermChange($event)"
             />
-            <span class="search-icon">&#x1F50D;</span>
-            <!-- Magnifying glass icon -->
+            <!-- <span class="search-icon">&#x1F50D;</span> Icon Removed -->
           </div>
         </div>
       </div>

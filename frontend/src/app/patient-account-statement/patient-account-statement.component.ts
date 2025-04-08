@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
@@ -67,7 +67,11 @@ export class PatientAccountStatementComponent implements OnInit, OnDestroy {
 
   private subscriptions = new Subscription();
 
-  constructor(private route: ActivatedRoute, private apiService: ApiService) {
+  constructor(
+    private route: ActivatedRoute,
+    private apiService: ApiService,
+    private router: Router
+  ) {
     // Combine raw data, search term, and sort state
     this.viewModel$ = combineLatest([
       this.rawStatement$,
@@ -208,5 +212,10 @@ export class PatientAccountStatementComponent implements OnInit, OnDestroy {
       return '\u21F5'; // Up-down arrow (default)
     }
     return state.direction === 'asc' ? '\u2191' : '\u2193'; // Up arrow or Down arrow
+  }
+
+  // Method to navigate back to the patient list
+  goBack(): void {
+    this.router.navigate(['/patients']); // Navigate to the list page
   }
 }

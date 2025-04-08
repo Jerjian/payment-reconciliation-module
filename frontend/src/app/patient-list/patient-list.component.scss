@@ -1,0 +1,224 @@
+// Import or copy base styles/variables if needed
+// For simplicity, copy relevant styles from patient-account-statement.component.scss
+
+// Variables (copy or import)
+$border-color: #dee2e6;
+$header-bg: #f8f9fa;
+$primary-color: #007bff;
+
+// --- General Layout & Container ---
+.container {
+  padding: 20px 30px;
+}
+
+// --- Page Header ---
+.page-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 25px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid $border-color;
+
+  h1 {
+    font-size: 1.8em;
+    font-weight: 500;
+    margin: 0;
+  }
+}
+
+// --- Section Wrapper ---
+.patient-list-section {
+  // Add padding/margin if needed, similar to account-statement section
+}
+
+// --- Table Controls (Copy from account-statement styles) ---
+.table-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding: 10px 15px;
+  background-color: $header-bg;
+  border: 1px solid $border-color;
+  border-radius: 4px;
+
+  span {
+    font-size: 0.9em;
+    color: #6c757d;
+  }
+
+  .page-size {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.9em;
+    color: #6c757d;
+    select {
+      padding: 5px 8px;
+      border: 1px solid #ced4da;
+      border-radius: 4px;
+      font-size: 0.9em;
+      background-color: #fff;
+    }
+  }
+
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+  }
+
+  .export-button {
+    padding: 6px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background-color: #fff;
+    color: #495057;
+    cursor: pointer;
+    font-size: 0.9em;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    .icon {
+      font-size: 1.1em;
+    }
+    &:hover {
+      background-color: #e9ecef;
+    }
+  }
+
+  .search-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+
+    input[type="search"] {
+      padding: 6px 12px;
+      border: 1px solid #ced4da;
+      border-radius: 15px;
+      font-size: 0.9em;
+      min-width: 200px;
+    }
+  }
+}
+
+// --- Table Styles (Copy and adjust from account-statement styles) ---
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 20px;
+  font-size: 0.9em;
+  // table-layout: fixed; // Keep default layout for patient list
+
+  thead {
+    background-color: $header-bg;
+  }
+
+  th,
+  td {
+    padding: 10px 15px;
+    text-align: left;
+    border-bottom: 1px solid $border-color;
+    vertical-align: middle;
+  }
+
+  th {
+    font-weight: 500;
+    color: #495057;
+    white-space: nowrap;
+    cursor: pointer;
+    .sort-icon {
+      color: #adb5bd;
+      margin-left: 5px;
+      font-size: 0.9em;
+    }
+  }
+
+  tbody tr {
+    // Zebra striping
+    &:nth-child(even) {
+      background-color: #f8f9fa;
+    }
+
+    // Clickable row styling
+    &.clickable-row {
+      cursor: pointer;
+      &:hover {
+        background-color: #e9ecef; // More distinct hover
+      }
+    }
+  }
+
+  td {
+    color: #333;
+  }
+
+  // Options column alignment if needed
+  .options-header,
+  .options {
+    text-align: right;
+    white-space: nowrap;
+  }
+}
+
+// --- Pagination Styles (Copy from account-statement styles) ---
+.pagination {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 10px 0;
+  font-size: 0.9em;
+  color: #6c757d;
+
+  button {
+    background: none;
+    border: 1px solid $border-color;
+    color: #6c757d;
+    padding: 5px 10px;
+    margin: 0 3px;
+    cursor: pointer;
+    border-radius: 4px;
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    &:not(:disabled):hover {
+      background-color: #e9ecef;
+    }
+  }
+
+  span {
+    margin: 0 10px;
+  }
+}
+
+// --- Loading/Error Messages (Copy from account-statement styles) ---
+.loading-message,
+.error-message {
+  padding: 20px;
+  text-align: center;
+  border-radius: 8px;
+  margin: 20px 0;
+  background-color: #f8f9fa;
+  border: 1px solid $border-color;
+}
+
+.loading-message {
+  color: $primary-color;
+}
+
+.error-message {
+  background-color: #f8d7da;
+  color: #721c24;
+  border-color: #f5c6cb;
+
+  h2 {
+    font-size: 1.2em;
+    margin-bottom: 10px;
+    color: inherit;
+  }
+  p {
+    margin: 0;
+  }
+}

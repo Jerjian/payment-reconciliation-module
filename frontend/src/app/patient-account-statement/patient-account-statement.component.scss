@@ -184,18 +184,11 @@ section {
       align-items: center;
 
       input[type="search"] {
-        padding: 6px 12px 6px 30px; /* Space for icon */
+        padding: 6px 12px;
         border: 1px solid #ced4da;
-        border-radius: 15px; /* Rounded corners */
+        border-radius: 15px;
         font-size: 0.9em;
         min-width: 200px;
-      }
-      .search-icon {
-        position: absolute;
-        left: 10px;
-        color: #6c757d;
-        font-size: 1.1em;
-        pointer-events: none; /* Allow clicking through icon */
       }
     }
   }

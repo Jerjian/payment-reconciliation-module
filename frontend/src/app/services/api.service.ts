@@ -166,6 +166,12 @@ export class ApiService {
     );
   }
 
+  // Method to delete a payment
+  deletePayment(paymentId: number): Observable<void> {
+    // Expecting a 204 No Content response, hence Observable<void>
+    return this.http.delete<void>(`${this.apiUrl}/payments/${paymentId}`);
+  }
+
   // --- Add other API methods here later ---
   // e.g., createPayment(paymentData: any): Observable<any> {}
   // e.g., updatePayment(paymentId: number, paymentData: any): Observable<any> {}

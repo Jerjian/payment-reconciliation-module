@@ -225,3 +225,87 @@ exports.updatePayment = async (req, res) => {
       .json({ message: "Error updating payment", error: error.message });
   }
 };
+
+// Delete a payment record
+exports.deletePayment = async (req, res) => {
+  const paymentId = parseInt(req.params.paymentId, 10);
+
+  // Basic Validation
+  if (isNaN(paymentId)) {
+    return res.status(400).json({ message: "Invalid payment ID format." });
+  }
+
+  const transaction = await db.sequelize.transaction(); // Start a transaction
+
+  try {
+    // 1. Find the existing Payment to get its InvoiceId
+    const payment = await Payment.findByPk(paymentId, { transaction });
+    if (!payment) {
+      await transaction.rollback();
+      return res
+        .status(404)
+        .json({ message: `Payment with ID ${paymentId} not found.` });
+    }
+
+    const invoiceIdToDeleteFrom = payment.InvoiceId; // Store the InvoiceId before deleting
+
+    // 2. Delete the Payment record
+    await payment.destroy({ transaction });
+
+    // 3. Recalculate and Update the associated Invoice AmountPaid and Status
+    const paymentSumResult = await Payment.findAll({
+      attributes: ["Amount", "isRefund"],
+      where: {
+        InvoiceId: invoiceIdToDeleteFrom,
+        TransactionStatus: "completed", // Only consider completed payments
+      },
+      raw: true,
+      transaction,
+    });
+
+    const totalPaid = paymentSumResult.reduce((sum, p) => {
+      const paymentAmount = parseFloat(p.Amount || 0);
+      return sum + (p.isRefund ? -paymentAmount : paymentAmount);
+    }, 0);
+
+    // Fetch the associated invoice again to get its patient portion
+    const invoice = await Invoice.findByPk(invoiceIdToDeleteFrom, {
+      transaction,
+    });
+    if (!invoice) {
+      // This is unlikely if the payment existed, but handle defensively
+      await transaction.rollback();
+      return res.status(500).json({
+        message: `Could not find associated invoice ID ${invoiceIdToDeleteFrom} after deleting payment. Data might be inconsistent.`,
+      });
+    }
+
+    const patientPortion = parseFloat(invoice.PatientPortion);
+    let newStatus = invoice.Status;
+
+    // Determine new status based on recalculated totalPaid
+    if (totalPaid >= patientPortion) {
+      newStatus = "paid";
+    } else if (totalPaid > 0) {
+      newStatus = "partially_paid";
+    } else {
+      newStatus = "pending"; // If no payments left, it's pending
+    }
+    // TODO: Consider 'overdue' logic if applicable
+
+    await Invoice.update(
+      { AmountPaid: totalPaid.toFixed(2), Status: newStatus },
+      { where: { id: invoiceIdToDeleteFrom }, transaction }
+    );
+
+    await transaction.commit(); // Commit the transaction
+
+    res.status(204).send(); // Send No Content on successful deletion
+  } catch (error) {
+    await transaction.rollback(); // Rollback on error
+    console.error(`Error deleting payment ID ${paymentId}:`, error);
+    res
+      .status(500)
+      .json({ message: "Error deleting payment", error: error.message });
+  }
+};

@@ -8,6 +8,9 @@ router.post("/", paymentController.createPayment); // POST /api/payments
 // PUT /api/payments/:paymentId - Update an existing payment
 router.put("/:paymentId", paymentController.updatePayment);
 
-// TODO: Add other payment-related routes if needed (e.g., get payment by ID, delete)
+// DELETE /api/payments/:paymentId - Delete a payment
+router.delete("/:paymentId", paymentController.deletePayment);
+
+// TODO: Add other payment-related routes if needed (e.g., get payment by ID)
 
 module.exports = router;

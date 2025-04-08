@@ -1,5 +1,6 @@
 require("dotenv").config(); // Load environment variables from .env file
 const express = require("express");
+const cors = require("cors"); // Import cors package
 
 // Import database models (Sequelize)
 const db = require("./models"); // Assumes index.js in models directory
@@ -9,6 +10,9 @@ const PORT = process.env.PORT || 3001; // Use port from .env or default to 3001
 
 // Middleware to parse JSON bodies
 app.use(express.json());
+
+// Enable CORS for all origins (adjust origins for production)
+app.use(cors());
 
 // Import Routes
 const patientRoutes = require("./routes/patientRoutes");

@@ -1,0 +1,152 @@
+/* Basic container and layout */
+.container {
+  padding: 20px;
+  font-family: sans-serif;
+}
+
+h2 {
+  color: #333;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+  margin-bottom: 20px;
+}
+
+section {
+  margin-bottom: 30px;
+  background-color: #f9f9f9;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Personal Info Grid */
+.personal-info .info-grid {
+  display: grid;
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(200px, 1fr)
+  ); /* Responsive grid */
+  gap: 15px;
+}
+
+.personal-info label {
+  display: block;
+  font-weight: bold;
+  color: #555;
+  margin-bottom: 4px;
+}
+
+.personal-info span {
+  color: #333;
+}
+
+/* Account Statement Section */
+.account-statement .summary {
+  margin-bottom: 20px;
+  font-size: 1.2em;
+}
+
+.account-statement .total-balance {
+  font-weight: bold;
+  color: #007bff; /* Example color */
+  margin-left: 10px;
+}
+
+.table-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  flex-wrap: wrap; /* Allow wrapping on smaller screens */
+  gap: 10px;
+}
+
+.table-controls input[type="search"] {
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.table-controls button {
+  padding: 8px 15px;
+  border: none;
+  border-radius: 4px;
+  background-color: #007bff;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.table-controls button:hover {
+  background-color: #0056b3;
+}
+
+/* Table Styles */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 20px;
+}
+
+thead {
+  background-color: #e9ecef;
+}
+
+th,
+td {
+  padding: 12px 15px;
+  text-align: left;
+  border-bottom: 1px solid #dee2e6;
+}
+
+th {
+  font-weight: 600;
+  color: #495057;
+}
+
+tbody tr:hover {
+  background-color: #f1f3f5;
+}
+
+.options {
+  text-align: center;
+}
+
+.icon-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.2em; /* Make icons slightly larger */
+  padding: 5px;
+  margin: 0 5px;
+  color: #007bff;
+}
+
+.icon-button:hover {
+  color: #0056b3;
+}
+
+/* Pagination and Messages */
+.pagination {
+  text-align: right;
+  margin-top: 20px;
+  color: #6c757d;
+}
+
+.loading-message,
+.error-message {
+  padding: 20px;
+  text-align: center;
+  border-radius: 8px;
+  margin: 20px 0;
+}
+
+.loading-message {
+  color: #007bff;
+}
+
+.error-message {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}

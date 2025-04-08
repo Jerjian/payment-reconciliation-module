@@ -1,0 +1,125 @@
+<div class="container">
+  <!-- Check for errors -->
+  <div *ngIf="error" class="error-message">
+    <h2>Error Loading Data</h2>
+    <p>{{ error }}</p>
+  </div>
+
+  <!-- Display data when loaded using AsyncPipe -->
+  <ng-container *ngIf="accountStatement$ | async as statement; else loading">
+    <!-- Patient Personal Information Section -->
+    <section class="personal-info">
+      <h2>Personal Information</h2>
+      <div class="info-grid">
+        <div>
+          <label>First Name</label>
+          <span>{{ statement.patientDetails.FirstName }}</span>
+        </div>
+        <div>
+          <label>Last Name</label>
+          <span>{{ statement.patientDetails.LastName }}</span>
+        </div>
+        <div>
+          <label>Salutation</label>
+          <span>{{ statement.patientDetails.Salutation }}</span>
+        </div>
+        <div>
+          <label>Gender</label>
+          <span>{{
+            statement.patientDetails.Gender === "M"
+              ? "Male"
+              : statement.patientDetails.Gender === "F"
+              ? "Female"
+              : "Other"
+          }}</span>
+        </div>
+        <div>
+          <label>Birth Date</label>
+          <span>{{
+            statement.patientDetails.Birthday | date : "dd.MM.yyyy"
+          }}</span>
+        </div>
+        <div>
+          <label>Language</label>
+          <span>{{
+            statement.patientDetails.Language === "E"
+              ? "English"
+              : statement.patientDetails.Language === "F"
+              ? "French"
+              : "Other"
+          }}</span>
+        </div>
+        <div>
+          <label>Height</label>
+          <span>{{ statement.patientDetails.Height }}</span>
+        </div>
+        <div>
+          <label>Weight</label>
+          <span>{{ statement.patientDetails.Weight }}</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Patient Account Statement Section -->
+    <section class="account-statement">
+      <h2>Patient Account Statement</h2>
+      <div class="summary">
+        <span>Total Balance:</span>
+        <span class="total-balance">{{
+          statement.TotalBalance | currency : "USD" : "symbol"
+        }}</span>
+        <!-- Adjust currency code/symbol as needed -->
+      </div>
+
+      <div class="table-controls">
+        <!-- Add controls like results count, page size, export, search later -->
+        <span>{{ statement.statementLines.length }} Results in Total</span>
+        <!-- TODO: Implement Table controls -->
+        <button>Export</button>
+        <input type="search" placeholder="Search" />
+      </div>
+
+      <!-- Statement Lines Table -->
+      <table>
+        <thead>
+          <tr>
+            <th>RxNum ID</th>
+            <!-- TODO: Add sorting icons/logic -->
+            <th>Therapy Title</th>
+            <th>Balance</th>
+            <th>Options</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let line of statement.statementLines">
+            <td>{{ line.RxNum }}</td>
+            <td>{{ line.TherapyName }}</td>
+            <td>{{ line.Balance | currency : "USD" : "symbol" }}</td>
+            <!-- Adjust currency code/symbol as needed -->
+            <td class="options">
+              <!-- TODO: Link/implement edit/delete actions -->
+              <button class="icon-button" title="Edit">✏️</button>
+              <button class="icon-button" title="Delete">🗑️</button>
+            </td>
+          </tr>
+          <!-- Handle empty state -->
+          <tr *ngIf="statement.statementLines.length === 0">
+            <td colspan="4">No statement lines found for this patient.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- TODO: Implement Pagination controls -->
+      <div class="pagination">
+        <span>Page 1 of 1</span>
+      </div>
+    </section>
+  </ng-container>
+
+  <!-- Loading Indicator -->
+  <ng-template #loading>
+    <div *ngIf="!error" class="loading-message">
+      Loading account statement...
+    </div>
+  </ng-template>
+</div>

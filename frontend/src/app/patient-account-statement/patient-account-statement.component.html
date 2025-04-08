@@ -1,61 +1,74 @@
 <div class="container">
+  <!-- Header with Back Button and Title (Mimicking image structure) -->
+  <div class="page-header">
+    <button class="back-button" title="Back">&#x2190;</button>
+    <!-- Simple back arrow -->
+    <h1 *ngIf="viewModel$ | async as vm">
+      {{ vm?.patientDetails?.FirstName }} {{ vm?.patientDetails?.LastName }}
+    </h1>
+  </div>
+
   <!-- Check for errors -->
   <div *ngIf="error" class="error-message">
     <h2>Error Loading Data</h2>
     <p>{{ error }}</p>
   </div>
 
-  <!-- Display data when loaded using AsyncPipe -->
-  <ng-container *ngIf="accountStatement$ | async as statement; else loading">
+  <!-- Loading Indicator -->
+  <div *ngIf="isLoading && !error" class="loading-message">
+    Loading account statement...
+  </div>
+
+  <!-- Display data when loaded (and not loading) -->
+  <!-- Use the new viewModel$ -->
+  <ng-container *ngIf="!isLoading && (viewModel$ | async) as vm">
     <!-- Patient Personal Information Section -->
     <section class="personal-info">
       <h2>Personal Information</h2>
-      <div class="info-grid">
+      <div class="info-grid" *ngIf="vm?.patientDetails">
         <div>
           <label>First Name</label>
-          <span>{{ statement.patientDetails.FirstName }}</span>
+          <span>{{ vm.patientDetails.FirstName }}</span>
         </div>
         <div>
           <label>Last Name</label>
-          <span>{{ statement.patientDetails.LastName }}</span>
+          <span>{{ vm.patientDetails.LastName }}</span>
         </div>
         <div>
           <label>Salutation</label>
-          <span>{{ statement.patientDetails.Salutation }}</span>
+          <span>{{ vm.patientDetails.Salutation }}</span>
         </div>
         <div>
           <label>Gender</label>
           <span>{{
-            statement.patientDetails.Gender === "M"
+            vm.patientDetails.Gender === "M"
               ? "Male"
-              : statement.patientDetails.Gender === "F"
+              : vm.patientDetails.Gender === "F"
               ? "Female"
               : "Other"
           }}</span>
         </div>
         <div>
           <label>Birth Date</label>
-          <span>{{
-            statement.patientDetails.Birthday | date : "dd.MM.yyyy"
-          }}</span>
+          <span>{{ vm.patientDetails.Birthday | date : "dd.MM.yyyy" }}</span>
         </div>
         <div>
           <label>Language</label>
           <span>{{
-            statement.patientDetails.Language === "E"
+            vm.patientDetails.Language === "E"
               ? "English"
-              : statement.patientDetails.Language === "F"
+              : vm.patientDetails.Language === "F"
               ? "French"
               : "Other"
           }}</span>
         </div>
         <div>
           <label>Height</label>
-          <span>{{ statement.patientDetails.Height }}</span>
+          <span>{{ vm.patientDetails.Height }}</span>
         </div>
         <div>
           <label>Weight</label>
-          <span>{{ statement.patientDetails.Weight }}</span>
+          <span>{{ vm.patientDetails.Weight }}</span>
         </div>
       </div>
     </section>
@@ -65,61 +78,110 @@
       <h2>Patient Account Statement</h2>
       <div class="summary">
         <span>Total Balance:</span>
+        <!-- Display total balance from vm -->
         <span class="total-balance">{{
-          statement.TotalBalance | currency : "USD" : "symbol"
+          vm.totalBalance | currency : "USD" : "symbol"
         }}</span>
-        <!-- Adjust currency code/symbol as needed -->
       </div>
 
       <div class="table-controls">
-        <!-- Add controls like results count, page size, export, search later -->
-        <span>{{ statement.statementLines.length }} Results in Total</span>
-        <!-- TODO: Implement Table controls -->
-        <button>Export</button>
-        <input type="search" placeholder="Search" />
+        <!-- Results count - use displayedResults from vm -->
+        <span
+          >{{ vm.displayedResults }} Result{{
+            vm.displayedResults === 1 ? "" : "s"
+          }}</span
+        >
+        <!-- Page size selector (static for now) -->
+        <div class="page-size">
+          <label>Page Size:</label>
+          <select>
+            <option>5</option>
+            <option>10</option>
+            <option>20</option>
+          </select>
+        </div>
+        <!-- Export and Search controls -->
+        <div class="actions">
+          <!-- Export button moved before search -->
+          <button class="export-button">
+            <span class="icon">&#x21E9;</span> Export
+            <!-- Export icon -->
+          </button>
+          <div class="search-container">
+            <input
+              type="search"
+              placeholder="Search"
+              [ngModel]="searchTerm$ | async"
+              (ngModelChange)="onSearchTermChange($event)"
+            />
+            <span class="search-icon">&#x1F50D;</span>
+            <!-- Magnifying glass icon -->
+          </div>
+        </div>
       </div>
 
       <!-- Statement Lines Table -->
       <table>
         <thead>
           <tr>
-            <th>RxNum ID</th>
-            <!-- TODO: Add sorting icons/logic -->
-            <th>Therapy Title</th>
-            <th>Balance</th>
-            <th>Options</th>
+            <!-- Add click handler and dynamic icon -->
+            <th (click)="applySort('RxNum')">
+              RxNum ID
+              <span class="sort-icon" *ngIf="sortState$ | async as state">{{
+                getSortIcon("RxNum", state)
+              }}</span>
+            </th>
+            <th (click)="applySort('TherapyName')">
+              Therapy Title
+              <span class="sort-icon" *ngIf="sortState$ | async as state">{{
+                getSortIcon("TherapyName", state)
+              }}</span>
+            </th>
+            <th (click)="applySort('Balance')">
+              Balance
+              <span class="sort-icon" *ngIf="sortState$ | async as state">{{
+                getSortIcon("Balance", state)
+              }}</span>
+            </th>
+            <th class="options-header">Options</th>
           </tr>
         </thead>
         <tbody>
-          <tr *ngFor="let line of statement.statementLines">
+          <!-- Iterate over filteredLines from vm -->
+          <tr *ngFor="let line of vm.filteredLines">
             <td>{{ line.RxNum }}</td>
             <td>{{ line.TherapyName }}</td>
-            <td>{{ line.Balance | currency : "USD" : "symbol" }}</td>
-            <!-- Adjust currency code/symbol as needed -->
+            <!-- Add class for positive/negative balance styling -->
+            <td
+              [class.negative-balance]="+line.Balance < 0"
+              [class.positive-balance]="+line.Balance > 0"
+            >
+              {{ line.Balance | currency : "USD" : "symbol" }}
+            </td>
             <td class="options">
-              <!-- TODO: Link/implement edit/delete actions -->
-              <button class="icon-button" title="Edit">✏️</button>
-              <button class="icon-button" title="Delete">🗑️</button>
+              <button class="icon-button edit-icon" title="Edit">
+                &#x270E;
+              </button>
+              <button class="icon-button delete-icon" title="Delete">
+                &times;
+              </button>
             </td>
           </tr>
-          <!-- Handle empty state -->
-          <tr *ngIf="statement.statementLines.length === 0">
-            <td colspan="4">No statement lines found for this patient.</td>
+          <!-- Handle empty state for filtered results -->
+          <tr *ngIf="vm.filteredLines.length === 0 && !isLoading && !error">
+            <td colspan="4">No statement lines found matching your search.</td>
           </tr>
         </tbody>
       </table>
 
-      <!-- TODO: Implement Pagination controls -->
+      <!-- Pagination controls (static for now) -->
       <div class="pagination">
+        <button title="First Page" disabled>&lt;&lt;</button>
+        <button title="Previous Page" disabled>&lt;</button>
         <span>Page 1 of 1</span>
+        <button title="Next Page" disabled>&gt;</button>
+        <button title="Last Page" disabled>&gt;&gt;</button>
       </div>
     </section>
   </ng-container>
-
-  <!-- Loading Indicator -->
-  <ng-template #loading>
-    <div *ngIf="!error" class="loading-message">
-      Loading account statement...
-    </div>
-  </ng-template>
 </div>

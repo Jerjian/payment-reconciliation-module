@@ -18,32 +18,69 @@ const {
   subMonths,
 } = require("date-fns");
 
-// Helper function to simulate adjudication (simplified)
-function simulateAdjudication(totalCharge, isProvincial, isOzempic) {
+// Helper function to simulate adjudication for a SINGLE plan
+function simulateSinglePlanAdjudication(
+  planDetails,
+  currentCharge,
+  drugDetails
+) {
   let insurancePays = 0.0;
-  let adjState = 0;
-  let resultCode = "N/A";
+  let adjState = 3; // Default to Rejected
+  let resultCode = "REJ";
+
+  if (!planDetails || currentCharge <= 0) {
+    return { insurancePays, adjState, resultCode };
+  }
+
+  const isProvincial = planDetails.plan?.IsProvincialPlan;
+  const isOzempic = drugDetails.BrandName === "Ozempic";
+  const isTylenol = drugDetails.GenericName === "Acetaminophen";
+
+  // Simple simulation rules:
+  // Provincial: Covers 75% of Ozempic, 0% of Tylenol/Lipitor
+  // Private: Covers 80% of anything *except* Tylenol (which it covers 50% of)
 
   if (isProvincial) {
     if (isOzempic) {
-      insurancePays = parseFloat((totalCharge * 0.75).toFixed(2));
+      insurancePays = Math.min(
+        currentCharge,
+        parseFloat((drugDetails.totalCharge * 0.75).toFixed(2))
+      ); // Pay up to 75% of ORIGINAL charge, but no more than current charge
       adjState = 1; // Paid
       resultCode = "PAY";
-    } else {
-      // Provincial plan doesn't cover Tylenol in this sim
-      insurancePays = 0.0;
-      adjState = 3; // Rejected
-      resultCode = "REJ";
     }
+    // Provincial pays 0 for others in this sim
   } else {
-    // Simulate private plan coverage
-    insurancePays = parseFloat((totalCharge * 0.8).toFixed(2)); // Private pays 80%
+    // Private Plan
+    let coveragePercent = 0.8;
+    if (isTylenol) {
+      coveragePercent = 0.5;
+    }
+    insurancePays = Math.min(
+      currentCharge,
+      parseFloat((drugDetails.totalCharge * coveragePercent).toFixed(2))
+    ); // Pay up to coverage % of ORIGINAL charge
     adjState = 1; // Paid
     resultCode = "PAY";
   }
-  const patientPortion = parseFloat((totalCharge - insurancePays).toFixed(2));
 
-  return { insurancePays, patientPortion, adjState, resultCode };
+  // Ensure insurance payment doesn't exceed remaining charge
+  insurancePays = Math.max(0, insurancePays); // Cannot pay negative
+  if (insurancePays > currentCharge) {
+    insurancePays = currentCharge; // Cap payment at what's left
+  }
+
+  if (insurancePays <= 0) {
+    insurancePays = 0;
+    adjState = 3; // If calc results in zero pay, mark as rejected
+    resultCode = "REJ";
+  }
+
+  return {
+    insurancePays: parseFloat(insurancePays.toFixed(2)),
+    adjState,
+    resultCode,
+  };
 }
 
 // Helper function to calculate financial statement data for a specific month
@@ -118,7 +155,7 @@ async function calculateFinancialStatementForMonth(year, month, transaction) {
 module.exports = {
   async up(queryInterface, Sequelize) {
     console.log(
-      "Starting database seeding (Enhanced)... DONT FORGET TO UPDATE MODELS FOR NEW FK CONSTRAINTS"
+      "Starting database seeding (Enhanced V2 - Multi-Plan)... DONT FORGET TO UPDATE MODELS FOR NEW FK CONSTRAINTS"
     );
     const transaction = await queryInterface.sequelize.transaction();
 
@@ -599,9 +636,10 @@ module.exports = {
 
       // --- 4. Link Patients to Plans (including multiple plans) ---
       console.log("Linking patients to plans...");
-      const createdPatientPlans = [];
+      const createdPatientPlansMap = new Map(); // Store plans per patient
       for (let i = 0; i < createdPatients.length; i++) {
         const patient = createdPatients[i];
+        const patientPlans = []; // Store plans for *this* patient
         const provPlan = createdPlans.find(
           (p) => p.Prov === patient.Prov && p.IsProvincialPlan
         );
@@ -635,7 +673,7 @@ module.exports = {
               },
               { transaction }
             );
-            createdPatientPlans.push(pp);
+            patientPlans.push(pp); // Add to this patient's list
           }
         }
 
@@ -670,14 +708,17 @@ module.exports = {
               },
               { transaction }
             );
-            createdPatientPlans.push(pp);
+            patientPlans.push(pp); // Add to this patient's list
           }
         }
+        createdPatientPlansMap.set(patient.id, patientPlans); // Store the list for the patient ID
       }
-      console.log(`Linked ${createdPatientPlans.length} patient plan entries.`);
+      console.log(`Linked plans for ${createdPatientPlansMap.size} patients.`);
 
-      // --- 5. Create Prescriptions, Adjudication, Invoices, Payments (Expanded Time Range) ---
-      console.log("Creating historical prescriptions chain...");
+      // --- 5. Create Prescriptions, Adjudication, Invoices, Payments (MODIFIED FOR MULTI-PLAN) ---
+      console.log(
+        "Creating historical prescriptions chain with multi-plan logic..."
+      );
       let baseRxNum = 10000;
       const paymentMethods = ["credit", "debit", "cash"];
       const today = new Date();
@@ -690,17 +731,27 @@ module.exports = {
       ) {
         const currentMonthDate = subMonths(today, monthOffset);
         const monthStart = startOfMonth(currentMonthDate);
-        const prescriptionsInMonth = Math.floor(Math.random() * 5) + 2; // 2-6 Rxs per month per patient
+        const prescriptionsInMonth = Math.floor(Math.random() * 4) + 1; // 1-4 Rxs per month per patient
 
         console.log(
           ` seeding for month: ${format(currentMonthDate, "yyyy-MM")}`
         );
 
         for (const patient of createdPatients) {
+          // Get this patient's plans, ordered by sequence (fetch once per patient per month)
+          const patientPlanInstances = await db.KrollPatientPlan.findAll({
+            where: { PatID: patient.id },
+            include: [
+              { model: db.KrollPlan, as: "plan" },
+              { model: db.KrollPlanSub, as: "subplan" },
+            ],
+            order: [["Sequence", "ASC"]],
+            transaction,
+          });
+
           for (let rxCount = 0; rxCount < prescriptionsInMonth; rxCount++) {
             const drugIndex = Math.floor(Math.random() * createdDrugs.length);
             const drug = createdDrugs[drugIndex];
-            const isOzempic = drug.BrandName === "Ozempic";
             const fillDate = addDays(
               monthStart,
               Math.floor(Math.random() * 28)
@@ -712,30 +763,28 @@ module.exports = {
             });
             if (!drugPack) continue;
 
-            // Use primary patient plan for adjudication sim
-            const primaryPatientPlan = await db.KrollPatientPlan.findOne({
-              where: { PatID: patient.id, Sequence: 1 }, // Assuming Sequence 1 is primary
-              include: [
-                { model: db.KrollPlan, as: "plan" },
-                { model: db.KrollPlanSub, as: "subplan" },
-              ],
-              transaction,
-            });
+            const dispQty =
+              drug.BrandName === "Ozempic"
+                ? 1.0
+                : Math.random() > 0.5
+                ? 90.0
+                : 30.0;
+            const daysSupply =
+              drug.BrandName === "Ozempic" ? 28 : dispQty === 90.0 ? 90 : 30;
 
-            const dispQty = isOzempic ? 1.0 : Math.random() > 0.5 ? 90.0 : 30.0;
-            const daysSupply = isOzempic ? 28 : dispQty === 90.0 ? 90 : 30;
-
+            // --- Pricing ---
             const baseCost = parseFloat(drugPack.AcqCost);
             const packSize = parseFloat(drugPack.PackSize);
-            const costPerDispUnit = baseCost / packSize; // Assuming packsize matches smallest unit
+            const costPerDispUnit = baseCost / packSize;
             const aac = parseFloat((costPerDispUnit * dispQty).toFixed(2));
-            const markup = parseFloat((aac * 0.1).toFixed(2)); // 10% markup
+            const markup = parseFloat((aac * 0.1).toFixed(2));
             const fee = 12.5;
             const totalCharge = parseFloat((aac + markup + fee).toFixed(2));
+            // --- End Pricing ---
 
             const rxNum = baseRxNum++;
 
-            // Create Prescription
+            // Create Prescription (initial state)
             const prescription = await db.KrollRxPrescription.create(
               {
                 PatID: patient.id,
@@ -774,65 +823,107 @@ module.exports = {
               { transaction }
             );
 
-            // Simulate Adjudication (using primary plan)
-            let adjResults = {
-              insurancePays: 0.0,
-              patientPortion: totalCharge,
-              adjState: 0,
-              resultCode: "N/A",
-            };
-            if (primaryPatientPlan && primaryPatientPlan.plan) {
-              adjResults = simulateAdjudication(
-                totalCharge,
-                primaryPatientPlan.plan.IsProvincialPlan,
-                isOzempic
+            // --- Sequential Adjudication ---
+            let currentRemainingCharge = totalCharge;
+            let totalInsurancePaid = 0;
+            let overallAdjState = 0; // Default state (no coverage)
+            const adjDate = addDays(fillDate, 1); // Simulate adj day after fill
+
+            // Decide which plans to apply
+            const planApplicationScenario = Math.random();
+            let plansToAttempt = [];
+            if (patientPlanInstances.length > 0) {
+              if (planApplicationScenario < 0.2) {
+                // 20% no plans
+                plansToAttempt = [];
+              } else if (planApplicationScenario < 0.7) {
+                // 50% primary only
+                plansToAttempt = [patientPlanInstances[0]];
+              } else {
+                // 30% all plans sequentially
+                plansToAttempt = patientPlanInstances;
+              }
+            }
+
+            for (const patientPlan of plansToAttempt) {
+              if (currentRemainingCharge <= 0) break; // Stop if already fully covered
+
+              const drugInfoForAdj = {
+                BrandName: drug.BrandName,
+                GenericName: drug.GenericName,
+                totalCharge: totalCharge,
+              };
+              const adjResult = simulateSinglePlanAdjudication(
+                patientPlan,
+                currentRemainingCharge,
+                drugInfoForAdj
               );
-              // Create RxPlan & RxPlanAdj
+
+              // Create RxPlan & RxPlanAdj for THIS plan attempt
               const rxPlan = await db.KrollRxPrescriptionPlan.create(
                 {
                   RxNum: rxNum,
-                  PatPlnID: primaryPatientPlan.id,
-                  Seq: 1,
-                  Pays: adjResults.insurancePays.toFixed(2),
+                  PatPlnID: patientPlan.id,
+                  Seq: patientPlan.Sequence,
+                  Pays: adjResult.insurancePays.toFixed(2),
                   TranType: 1,
-                  AdjState: adjResults.adjState,
-                  SubPlanCode: primaryPatientPlan.subplan.SubPlanCode,
+                  AdjState: adjResult.adjState,
+                  SubPlanCode: patientPlan.subplan.SubPlanCode,
                   IsRT: true,
-                  AdjDate: addDays(fillDate, 1),
+                  AdjDate: adjDate,
                 },
                 { transaction }
               );
               await db.KrollRxPrescriptionPlanAdj.create(
                 {
                   RxPlnID: rxPlan.id,
-                  TS: addDays(fillDate, 1),
-                  ResultCode: adjResults.resultCode,
-                  AdjDate: addDays(fillDate, 1),
+                  TS: adjDate,
+                  ResultCode: adjResult.resultCode,
+                  AdjDate: adjDate,
                   Cost: aac.toFixed(2),
                   Markup: markup.toFixed(2),
                   Fee: fee.toFixed(2),
                   MixFee: "0.00",
                   SSCFee: "0.00",
-                  PlanPays: adjResults.insurancePays.toFixed(2),
+                  PlanPays: adjResult.insurancePays.toFixed(2),
                   SubCost: aac.toFixed(2),
                   SubMarkup: markup.toFixed(2),
                   SubFee: fee.toFixed(2),
                   SubMixFee: "0.00",
                   SubSSCFee: "0.00",
                   PrevPaid: "0.00",
-                  AdjudicationLevel: 1,
+                  AdjudicationLevel: patientPlan.Sequence,
                   RxNum: rxNum,
-                  Copay: adjResults.patientPortion.toFixed(2),
+                  Copay: Math.max(
+                    0,
+                    currentRemainingCharge - adjResult.insurancePays
+                  ).toFixed(2),
                   Deductible: "0.00",
                   CoInsurance: "0.00",
                 },
                 { transaction }
               );
-              prescription.AdjState = adjResults.adjState;
-              await prescription.save({ transaction });
+
+              currentRemainingCharge -= adjResult.insurancePays;
+              totalInsurancePaid += adjResult.insurancePays;
+
+              if (adjResult.adjState === 1) {
+                overallAdjState = 1; // Mark as paid if any plan pays
+              } else if (overallAdjState !== 1) {
+                overallAdjState = adjResult.adjState; // Keep last non-paid state if nothing paid yet
+              }
             }
 
-            // Create Invoice
+            const finalPatientPortion = Math.max(
+              0,
+              parseFloat(currentRemainingCharge.toFixed(2))
+            );
+            // Update prescription overall adj state
+            prescription.AdjState = overallAdjState;
+            await prescription.save({ transaction });
+            // --- End Adjudication ---
+
+            // Create Invoice (with final patient portion)
             const invoice = await db.Invoice.create(
               {
                 PatientId: patient.id,
@@ -842,92 +933,103 @@ module.exports = {
                 Description: `Rx #${rxNum} ${drug.BrandName}`,
                 Amount: totalCharge.toFixed(2),
                 AmountPaid: "0.00",
-                InsuranceCoveredAmount: adjResults.insurancePays.toFixed(2),
-                PatientPortion: adjResults.patientPortion.toFixed(2),
-                Status: "pending",
+                InsuranceCoveredAmount: totalInsurancePaid.toFixed(2),
+                PatientPortion: finalPatientPortion.toFixed(2),
+                Status: finalPatientPortion <= 0 ? "paid" : "pending",
               },
               { transaction }
             );
 
-            // Create Payment (Varied scenarios)
-            let paymentAmount = 0.0;
-            let isRefund = false;
-            const paymentScenario = Math.random();
-            if (adjResults.patientPortion > 0) {
+            // Create Patient Payment (if needed, based on final patient portion)
+            if (finalPatientPortion > 0) {
+              let paymentAmount = 0.0;
+              const paymentScenario = Math.random();
               if (paymentScenario < 0.7) {
                 // 70% chance of full payment
-                paymentAmount = adjResults.patientPortion;
+                paymentAmount = finalPatientPortion;
               } else if (paymentScenario < 0.85) {
                 // 15% chance of partial payment
                 paymentAmount = parseFloat(
-                  (
-                    adjResults.patientPortion *
-                    (Math.random() * 0.5 + 0.2)
-                  ).toFixed(2)
-                ); // Pay 20-70%
-              } // 15% chance of no payment yet
-            }
+                  (finalPatientPortion * (Math.random() * 0.5 + 0.2)).toFixed(2)
+                );
+              }
 
-            if (paymentAmount > 0) {
-              const paymentDate = addDays(
-                fillDate,
-                Math.floor(Math.random() * 14) + 3
-              ); // Pay 3-16 days later
-              await db.Payment.create(
-                {
-                  PatientId: patient.id,
-                  InvoiceId: invoice.id,
-                  Amount: paymentAmount.toFixed(2),
-                  PaymentDate: paymentDate,
-                  PaymentMethod: paymentMethods[rxNum % paymentMethods.length],
-                  TransactionStatus: "completed",
-                  isRefund: isRefund,
-                },
-                { transaction }
-              );
-              invoice.AmountPaid = paymentAmount.toFixed(2);
-              invoice.Status =
-                paymentAmount >= adjResults.patientPortion
-                  ? "paid"
-                  : "partially_paid";
-              await invoice.save({ transaction });
-
-              // Add a refund sometimes (5% chance if paid)
-              if (invoice.Status === "paid" && Math.random() < 0.05) {
-                const refundAmount = parseFloat(
-                  (paymentAmount * (Math.random() * 0.3 + 0.1)).toFixed(2)
-                ); // Refund 10-40%
-                const refundDate = addDays(
-                  paymentDate,
-                  Math.floor(Math.random() * 7) + 1
+              if (paymentAmount > 0) {
+                const paymentDate = addDays(
+                  fillDate,
+                  Math.floor(Math.random() * 14) + 3
                 );
                 await db.Payment.create(
                   {
                     PatientId: patient.id,
                     InvoiceId: invoice.id,
-                    Amount: refundAmount.toFixed(2),
-                    PaymentDate: refundDate,
-                    PaymentMethod: "refund",
+                    Amount: paymentAmount.toFixed(2),
+                    PaymentDate: paymentDate,
+                    PaymentMethod:
+                      paymentMethods[rxNum % paymentMethods.length],
                     TransactionStatus: "completed",
-                    isRefund: true,
-                    Notes: "Seed refund",
+                    isRefund: false,
                   },
                   { transaction }
                 );
-                // Recalculate AmountPaid and Status after refund
-                const finalAmountPaid = paymentAmount - refundAmount;
-                invoice.AmountPaid = finalAmountPaid.toFixed(2);
+
+                // Update invoice amount paid and status
+                const currentAmountPaid =
+                  parseFloat(invoice.AmountPaid) + paymentAmount;
+                invoice.AmountPaid = currentAmountPaid.toFixed(2);
                 invoice.Status =
-                  finalAmountPaid >= adjResults.patientPortion
+                  currentAmountPaid >= finalPatientPortion
                     ? "paid"
-                    : "partially_paid"; // Could become partial again
+                    : "partially_paid";
+                await invoice.save({ transaction });
+
+                // Add a refund sometimes (5% chance if paid fully by patient)
+                if (invoice.Status === "paid" && Math.random() < 0.05) {
+                  const refundAmount = parseFloat(
+                    (paymentAmount * (Math.random() * 0.3 + 0.1)).toFixed(2)
+                  );
+                  const refundDate = addDays(
+                    paymentDate,
+                    Math.floor(Math.random() * 7) + 1
+                  );
+                  await db.Payment.create(
+                    {
+                      PatientId: patient.id,
+                      InvoiceId: invoice.id,
+                      Amount: refundAmount.toFixed(2),
+                      PaymentDate: refundDate,
+                      PaymentMethod: "refund",
+                      TransactionStatus: "completed",
+                      isRefund: true,
+                      Notes: "Seed refund",
+                    },
+                    { transaction }
+                  );
+
+                  // Recalculate AmountPaid and Status after refund
+                  const finalAmountPaidAfterRefund =
+                    currentAmountPaid - refundAmount;
+                  invoice.AmountPaid = finalAmountPaidAfterRefund.toFixed(2);
+                  invoice.Status =
+                    finalAmountPaidAfterRefund >= finalPatientPortion
+                      ? "paid"
+                      : "partially_paid";
+                  await invoice.save({ transaction });
+                }
+              }
+            } else {
+              // If patient portion was 0, ensure invoice status reflects it
+              if (invoice.Status !== "paid") {
+                invoice.Status = "paid";
                 await invoice.save({ transaction });
               }
             }
           } // End loop through Rxs for patient
         } // End loop through patients
       } // End loop through months
-      console.log("Finished creating historical prescriptions chain.");
+      console.log(
+        "Finished creating historical prescriptions chain with multi-plan logic."
+      );
 
       // --- 6. Generate Historical Monthly Statements ---
       console.log("Generating historical monthly statements...");
@@ -1046,10 +1148,15 @@ module.exports = {
       console.log("Finished generating financial statements.");
 
       await transaction.commit();
-      console.log("Database seeding completed successfully! (Enhanced)");
+      console.log(
+        "Database seeding completed successfully! (Enhanced V2 - Multi-Plan)"
+      );
     } catch (error) {
       await transaction.rollback();
-      console.error("Error seeding database (Enhanced):", error);
+      console.error(
+        "Error seeding database (Enhanced V2 - Multi-Plan):",
+        error
+      );
       if (error.original) {
         console.error("Original Error:", error.original);
       }
@@ -1058,7 +1165,7 @@ module.exports = {
 
   async down(queryInterface, Sequelize) {
     // Keep the down function simple: just clear all tables in reverse order
-    console.log("Reverting seed data (Enhanced)...");
+    console.log("Reverting seed data (Enhanced V2 - Multi-Plan)...");
     const transaction = await queryInterface.sequelize.transaction();
     try {
       // Same clearing logic as in the up method's beginning

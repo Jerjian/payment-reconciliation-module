@@ -1,0 +1,115 @@
+<div class="modal-backdrop" (click)="onCancel()"></div>
+<div class="modal-content">
+  <div class="modal-header">
+    <h2>{{ isEditMode ? "Edit" : "Add" }} Transaction</h2>
+    <button class="close-button" (click)="onCancel()">&times;</button>
+  </div>
+  <div class="modal-body">
+    <form [formGroup]="transactionForm" (ngSubmit)="onSubmit()">
+      <!-- Invoice ID (Display Only) -->
+      <div class="form-group">
+        <label>Invoice Reference</label>
+        <input type="text" [value]="invoiceId || 'N/A'" readonly disabled />
+      </div>
+
+      <!-- Date -->
+      <div class="form-group">
+        <label for="paymentDate">Date *</label>
+        <div class="input-with-icon">
+          <input id="paymentDate" type="date" formControlName="paymentDate" />
+          <!-- Basic date picker -->
+        </div>
+        <div
+          *ngIf="
+            transactionForm.controls['paymentDate'].invalid &&
+            transactionForm.controls['paymentDate'].touched
+          "
+          class="error-text"
+        >
+          Date is required.
+        </div>
+      </div>
+
+      <!-- Amount -->
+      <div class="form-group">
+        <label for="amount">Amount *</label>
+        <div class="input-with-icon">
+          <input
+            id="amount"
+            type="number"
+            placeholder="Please Enter"
+            formControlName="amount"
+            min="0.01"
+            step="0.01"
+          />
+          <span class="input-icon">$</span>
+        </div>
+        <div
+          *ngIf="
+            transactionForm.controls['amount'].invalid &&
+            transactionForm.controls['amount'].touched
+          "
+          class="error-text"
+        >
+          <span *ngIf="transactionForm.controls['amount'].errors?.['required']"
+            >Amount is required.</span
+          >
+          <span *ngIf="transactionForm.controls['amount'].errors?.['min']"
+            >Amount must be positive.</span
+          >
+        </div>
+      </div>
+
+      <!-- Payment Method -->
+      <div class="form-group">
+        <label for="paymentMethod">Payment Method *</label>
+        <select id="paymentMethod" formControlName="paymentMethod">
+          <option value="" disabled>Please select</option>
+          <option
+            *ngFor="let method of paymentMethods"
+            [value]="method.toLowerCase().replace(' ', '_')"
+          >
+            {{ method }}
+          </option>
+        </select>
+        <div
+          *ngIf="
+            transactionForm.controls['paymentMethod'].invalid &&
+            transactionForm.controls['paymentMethod'].touched
+          "
+          class="error-text"
+        >
+          Payment method is required.
+        </div>
+      </div>
+
+      <!-- Reference Number (Display Only/Optional Input - Not editable based on last discussion) -->
+      <!-- <div class="form-group">
+        <label for="referenceNumber">Reference Number</label>
+        <input id="referenceNumber" type="text" placeholder="Please enter" formControlName="referenceNumber" />
+      </div> -->
+
+      <!-- Refund Toggle -->
+      <div class="form-group refund-toggle">
+        <label class="switch">
+          <input type="checkbox" formControlName="isRefund" />
+          <span class="slider round"></span>
+        </label>
+        <span>Refund</span>
+      </div>
+    </form>
+  </div>
+  <div class="modal-footer">
+    <button type="button" class="btn btn-secondary" (click)="onCancel()">
+      Cancel
+    </button>
+    <button
+      type="submit"
+      class="btn btn-primary"
+      (click)="onSubmit()"
+      [disabled]="!transactionForm.valid"
+    >
+      {{ isEditMode ? "Update" : "Add" }} Transaction
+    </button>
+  </div>
+</div>

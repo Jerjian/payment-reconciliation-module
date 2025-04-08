@@ -78,6 +78,27 @@ export interface PrescriptionDetailResponse {
   transactionHistory: TransactionHistoryItem[];
 }
 
+// Interface for creating/updating a payment
+export interface PaymentRequestBody {
+  invoiceId: number;
+  amount: number;
+  paymentDate: string; // Expecting YYYY-MM-DD or ISO string
+  paymentMethod: string;
+  referenceNumber?: string | null;
+  isRefund: boolean;
+  notes?: string | null;
+}
+
+// Interface for the Payment object returned by the API
+export interface Payment extends PaymentRequestBody {
+  id: number;
+  PatientId: number;
+  TransactionStatus: string; // e.g., 'completed', 'pending', 'failed'
+  ExternalTransactionId?: string | null;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -107,22 +128,11 @@ export class ApiService {
     year?: number,
     month?: number
   ): Observable<FinancialStatementData> {
-    let params = {};
+    let params: { [param: string]: string } = {};
     if (year !== undefined && month !== undefined) {
-      // Construct the date string for the first day of the month
-      // The backend currently expects start/end dates, let's adjust this later if needed
-      // For now, send year and month, assuming backend handles it or defaults
-      // A better approach might be to adjust the backend to accept year/month directly
-      // or construct specific start/end dates here if backend requires them.
       const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
-      // We'll just send the start date for now, assuming backend can derive the period
-      // OR adjust backend to specifically use year/month query params
-      params = { startDate }; // Simple approach for now
-      // params = { year, month }; // If backend is updated
+      params['startDate'] = startDate;
     }
-
-    // If year/month are provided, they will be in params
-    // If not, params is empty, and backend should return latest/default
     return this.http.get<FinancialStatementData>(
       `${this.apiUrl}/statements/financial`,
       { params }
@@ -136,6 +146,23 @@ export class ApiService {
   ): Observable<PrescriptionDetailResponse> {
     return this.http.get<PrescriptionDetailResponse>(
       `${this.apiUrl}/patients/${patientId}/prescriptions/${rxNum}/details`
+    );
+  }
+
+  // Method to create a new payment
+  createPayment(paymentData: PaymentRequestBody): Observable<Payment> {
+    // The backend route is POST /api/payments
+    return this.http.post<Payment>(`${this.apiUrl}/payments`, paymentData);
+  }
+
+  // Method to update an existing payment
+  updatePayment(
+    paymentId: number,
+    paymentData: Partial<PaymentRequestBody>
+  ): Observable<Payment> {
+    return this.http.put<Payment>(
+      `${this.apiUrl}/payments/${paymentId}`,
+      paymentData
     );
   }
 

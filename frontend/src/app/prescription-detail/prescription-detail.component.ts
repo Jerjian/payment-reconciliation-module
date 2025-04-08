@@ -1,11 +1,14 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import {
   ApiService,
   PrescriptionDetailResponse,
   TransactionHistoryItem,
+  PatientDetails,
+  PaymentRequestBody,
+  Payment,
 } from '../services/api.service';
 import {
   Observable,
@@ -24,6 +27,10 @@ import {
   distinctUntilChanged,
 } from 'rxjs/operators';
 import { format } from 'date-fns';
+import {
+  AddTransactionModalComponent,
+  AddTransactionFormData,
+} from '../add-transaction-modal/add-transaction-modal.component';
 
 // Define sortable columns for the transaction table
 type SortableColumn =
@@ -36,7 +43,12 @@ type SortableColumn =
 @Component({
   selector: 'app-prescription-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule], // Add CommonModule and FormsModule if needed
+  imports: [
+    CommonModule,
+    FormsModule,
+    ReactiveFormsModule,
+    AddTransactionModalComponent,
+  ],
   templateUrl: './prescription-detail.component.html',
   styleUrl: './prescription-detail.component.scss',
 })
@@ -68,8 +80,11 @@ export class PrescriptionDetailComponent implements OnInit, OnDestroy {
 
   patientId: number | null = null;
   rxNum: number | null = null;
+  currentInvoiceId: number | null = null;
   error: string | null = null;
   isLoading: boolean = false;
+  isModalOpen = false;
+  transactionToEdit: TransactionHistoryItem | null = null;
 
   private subscriptions = new Subscription();
 
@@ -197,6 +212,8 @@ export class PrescriptionDetailComponent implements OnInit, OnDestroy {
           }),
           tap((data) => {
             this.prescriptionDataSubject.next(data);
+            this.currentInvoiceId =
+              data?.prescriptionDetails?.InvoiceId ?? null;
             this.error = data ? null : this.error; // Clear error only if data loaded
             this.isLoading = false;
           })
@@ -257,19 +274,140 @@ export class PrescriptionDetailComponent implements OnInit, OnDestroy {
 
   // Placeholder for Edit Transaction
   editTransaction(transaction: TransactionHistoryItem): void {
-    console.log('Edit transaction:', transaction);
-    alert('Edit transaction functionality not yet implemented.');
+    // Only allow editing patient payments for now
+    if (transaction.type === 'PatientPayment') {
+      console.log('Editing transaction:', transaction);
+      this.transactionToEdit = transaction; // Set the transaction to edit
+      this.isModalOpen = true; // Open the modal
+    } else {
+      alert('Editing insurance adjustments is not supported yet.');
+    }
   }
 
   // Placeholder for Delete Transaction
   deleteTransaction(transaction: TransactionHistoryItem): void {
     console.log('Delete transaction:', transaction);
-    // Confirmation dialog is recommended here
     alert('Delete transaction functionality not yet implemented.');
   }
 
   // Helper for formatting date in the template if needed directly (alternative to pipe)
   formatDate(date: string | Date): string {
     return format(new Date(date), 'MM.dd.yyyy');
+  }
+
+  // --- Modal Methods ---
+  openAddTransactionModal(): void {
+    if (this.currentInvoiceId) {
+      this.isModalOpen = true;
+    } else {
+      this.error = 'Cannot add transaction: Invoice ID is missing.';
+      console.error('Cannot open modal, currentInvoiceId is null');
+      // Optionally show a user-friendly message
+    }
+  }
+
+  handleCloseModal(): void {
+    this.isModalOpen = false;
+    this.transactionToEdit = null; // Clear transaction on close
+  }
+
+  handleFormSubmit(formData: AddTransactionFormData & { id?: string }): void {
+    console.log('Form Submitted:', formData);
+
+    const isEditing = !!formData.id; // Check if it's an edit
+    const paymentIdToUpdate = isEditing
+      ? parseInt(formData.id!.split('-')[1], 10)
+      : null;
+
+    // Construct the main request body (excluding invoiceId for update)
+    const requestBody: Partial<PaymentRequestBody> = {
+      amount: formData.amount,
+      paymentDate: formData.paymentDate,
+      paymentMethod: formData.paymentMethod,
+      isRefund: formData.isRefund,
+      // referenceNumber: formData.referenceNumber, // Only if collected/editable
+    };
+
+    this.isLoading = true;
+    this.isModalOpen = false;
+
+    let apiCall: Observable<Payment>;
+
+    if (isEditing && paymentIdToUpdate) {
+      console.log(`Updating payment ID: ${paymentIdToUpdate}`);
+      apiCall = this.apiService.updatePayment(paymentIdToUpdate, requestBody);
+    } else if (!isEditing && this.currentInvoiceId) {
+      console.log(
+        `Creating new payment for invoice ID: ${this.currentInvoiceId}`
+      );
+      // Add invoiceId only when creating
+      const createBody: PaymentRequestBody = {
+        ...requestBody,
+        invoiceId: this.currentInvoiceId,
+      } as PaymentRequestBody;
+      apiCall = this.apiService.createPayment(createBody);
+    } else {
+      console.error(
+        'Invalid state for submission: Missing invoiceId for create or paymentId for update.'
+      );
+      this.error = 'Cannot submit transaction: Invalid state.';
+      this.isLoading = false;
+      this.transactionToEdit = null;
+      return;
+    }
+
+    this.subscriptions.add(
+      apiCall.subscribe({
+        next: (savedPayment) => {
+          console.log(
+            `Payment ${isEditing ? 'updated' : 'created'}:`,
+            savedPayment
+          );
+          this.refreshPrescriptionDetails(); // Reload data
+          this.transactionToEdit = null; // Clear editing state
+        },
+        error: (err) => {
+          console.error(
+            `Error ${isEditing ? 'updating' : 'creating'} payment:`,
+            err
+          );
+          this.error = `Failed to ${
+            isEditing ? 'update' : 'add'
+          } transaction: ${err.message || 'Unknown error'}`;
+          this.isLoading = false;
+          this.transactionToEdit = null; // Clear editing state on error too
+        },
+      })
+    );
+  }
+
+  // Helper to reload data after modification
+  refreshPrescriptionDetails(): void {
+    if (this.patientId && this.rxNum) {
+      this.isLoading = true;
+      this.subscriptions.add(
+        this.apiService
+          .getPrescriptionDetails(this.patientId, this.rxNum)
+          .subscribe({
+            next: (data) => {
+              this.prescriptionDataSubject.next(data);
+              this.currentInvoiceId =
+                data?.prescriptionDetails?.InvoiceId ?? null;
+              this.error = null;
+              this.isLoading = false;
+            },
+            error: (err) => {
+              console.error('Error reloading prescription details:', err);
+              this.error = `Failed to reload details: ${
+                err.message || 'Unknown error'
+              }`;
+              this.prescriptionDataSubject.next(null);
+              this.isLoading = false;
+            },
+          })
+      );
+    } else {
+      console.error('Cannot refresh details: PatientId or RxNum missing');
+    }
   }
 }

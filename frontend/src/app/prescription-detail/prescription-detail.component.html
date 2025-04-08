@@ -65,7 +65,10 @@
       <!-- Table Controls -->
       <div class="table-controls">
         <div>
-          <button class="action-button add-button" (click)="addTransaction()">
+          <button
+            class="action-button add-button"
+            (click)="openAddTransactionModal()"
+          >
             + Add Transaction
           </button>
           <span class="results-count">
@@ -186,4 +189,13 @@
       </div>
     </section>
   </ng-container>
+
+  <app-add-transaction-modal
+    *ngIf="isModalOpen"
+    [invoiceId]="currentInvoiceId"
+    [existingTransaction]="transactionToEdit"
+    (closeModal)="handleCloseModal()"
+    (submitForm)="handleFormSubmit($event)"
+  >
+  </app-add-transaction-modal>
 </div>

@@ -284,10 +284,59 @@ export class PrescriptionDetailComponent implements OnInit, OnDestroy {
     }
   }
 
-  // Placeholder for Delete Transaction
+  // Handle Delete Transaction
   deleteTransaction(transaction: TransactionHistoryItem): void {
-    console.log('Delete transaction:', transaction);
-    alert('Delete transaction functionality not yet implemented.');
+    // Only allow deleting patient payments for now
+    if (transaction.type !== 'PatientPayment') {
+      alert('Deleting insurance adjustments is not supported yet.');
+      return;
+    }
+
+    const paymentIdString = transaction.id.split('-')[1];
+    if (!paymentIdString) {
+      console.error(
+        'Could not extract payment ID from transaction:',
+        transaction
+      );
+      this.error = 'Error: Could not identify the payment to delete.';
+      return;
+    }
+    const paymentId = parseInt(paymentIdString, 10);
+    if (isNaN(paymentId)) {
+      console.error('Invalid payment ID parsed:', paymentIdString);
+      this.error = 'Error: Invalid payment identifier.';
+      return;
+    }
+
+    // Confirmation dialog
+    const confirmation = confirm(
+      `Are you sure you want to delete this payment of ${transaction.amount}?`
+    );
+    if (!confirmation) {
+      return; // User cancelled
+    }
+
+    console.log(`Attempting to delete payment ID: ${paymentId}`);
+    this.isLoading = true;
+    this.error = null; // Clear previous errors
+
+    this.subscriptions.add(
+      this.apiService.deletePayment(paymentId).subscribe({
+        next: () => {
+          console.log(`Payment ID ${paymentId} deleted successfully.`);
+          this.refreshPrescriptionDetails(); // Reload data on success
+          // Optionally show a success message to the user
+        },
+        error: (err) => {
+          console.error(`Error deleting payment ID ${paymentId}:`, err);
+          this.error = `Failed to delete transaction: ${
+            err.message || 'Unknown API error'
+          }`;
+          this.isLoading = false; // Ensure loading indicator stops on error
+        },
+        // 'complete' is called after 'next' or 'error', isLoading is set in next/error
+      })
+    );
   }
 
   // Helper for formatting date in the template if needed directly (alternative to pipe)

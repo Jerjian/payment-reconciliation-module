@@ -1,0 +1,189 @@
+<div class="container">
+  <!-- Header with Back Button and Title -->
+  <div class="page-header">
+    <button class="back-button" title="Back" (click)="goBack()">
+      &#x2190;
+    </button>
+    <!-- Display Therapy Name from ViewModel -->
+    <h1>
+      {{ (viewModel$ | async)?.details?.TherapyName || "Prescription Details" }}
+    </h1>
+  </div>
+
+  <!-- Loading Indicator -->
+  <div *ngIf="isLoading" class="loading-message">Loading details...</div>
+
+  <!-- Error Message -->
+  <div *ngIf="error && !isLoading" class="error-message">
+    <h2>Error Loading Data</h2>
+    <p>{{ error }}</p>
+  </div>
+
+  <!-- Main Content Area -->
+  <ng-container *ngIf="!isLoading && !error && (viewModel$ | async) as vm">
+    <!-- Summary Section -->
+    <section class="summary-section">
+      <div class="summary-item">
+        <label>Rx Number</label>
+        <span>{{ vm.details?.RxNum }}</span>
+      </div>
+      <div class="summary-item">
+        <label>Fill Date</label>
+        <span>{{ vm.details?.FillDate | date : "MM.dd.yyyy" }}</span>
+      </div>
+      <div class="summary-item">
+        <label>Total Charge</label>
+        <span>{{ vm.details?.TotalCharge | currency : "USD" : "symbol" }}</span>
+      </div>
+      <div class="summary-item">
+        <label>Insurance Paid</label>
+        <span>{{
+          vm.details?.InsurancePaid | currency : "USD" : "symbol"
+        }}</span>
+      </div>
+      <div class="summary-item">
+        <label>Patient Portion</label>
+        <span>{{
+          vm.details?.PatientPortionInitial | currency : "USD" : "symbol"
+        }}</span>
+      </div>
+      <div class="summary-item balance">
+        <label>Current Balance</label>
+        <span
+          [class.negative-balance]="+vm.currentBalance < 0"
+          [class.positive-balance]="+vm.currentBalance > 0"
+        >
+          {{ vm.currentBalance | currency : "USD" : "symbol" }}
+        </span>
+      </div>
+    </section>
+
+    <!-- Transaction History Section -->
+    <section class="transaction-history">
+      <h2>Transaction History</h2>
+
+      <!-- Table Controls -->
+      <div class="table-controls">
+        <div>
+          <button class="action-button add-button" (click)="addTransaction()">
+            + Add Transaction
+          </button>
+          <span class="results-count">
+            {{ vm.displayedResults }} Result{{
+              vm.displayedResults === 1 ? "" : "s"
+            }}
+            in Total
+          </span>
+        </div>
+        <div class="actions-right">
+          <button class="action-button export-button">
+            <span class="icon">&#x21E9;</span> Export
+          </button>
+          <div class="search-container">
+            <input
+              type="search"
+              placeholder="Search Transactions"
+              [ngModel]="searchTerm$ | async"
+              (ngModelChange)="onSearchTermChange($event)"
+            />
+            <span class="search-icon">&#x1F50D;</span>
+          </div>
+          <div class="page-size">
+            <label>Page Size:</label>
+            <select>
+              <option>10</option>
+              <option>25</option>
+              <option>50</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Transactions Table -->
+      <table>
+        <thead>
+          <tr>
+            <th (click)="applySort('paymentPlan')" class="col-plan">
+              Payment Plan
+              <span class="sort-icon" *ngIf="sortState$ | async as state">{{
+                getSortIcon("paymentPlan", state)
+              }}</span>
+            </th>
+            <th (click)="applySort('date')" class="col-date">
+              Date
+              <span class="sort-icon" *ngIf="sortState$ | async as state">{{
+                getSortIcon("date", state)
+              }}</span>
+            </th>
+            <th (click)="applySort('amount')" class="col-amount">
+              Amount
+              <span class="sort-icon" *ngIf="sortState$ | async as state">{{
+                getSortIcon("amount", state)
+              }}</span>
+            </th>
+            <th (click)="applySort('paymentMethod')" class="col-method">
+              Payment Method
+              <span class="sort-icon" *ngIf="sortState$ | async as state">{{
+                getSortIcon("paymentMethod", state)
+              }}</span>
+            </th>
+            <th class="col-ref">Reference Number</th>
+            <th (click)="applySort('refund')" class="col-refund">
+              Refund
+              <span class="sort-icon" *ngIf="sortState$ | async as state">{{
+                getSortIcon("refund", state)
+              }}</span>
+            </th>
+            <th class="col-options options-header">Options</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let tx of vm.filteredTransactions">
+            <td>{{ tx.paymentPlan || "Patient Payment" }}</td>
+            <td>{{ tx.date | date : "MM.dd.yyyy" }}</td>
+            <!-- Apply styling for refunds -->
+            <td [class.refund-amount]="tx.refund">
+              {{
+                (tx.refund ? -1 : 1) * +tx.amount | currency : "USD" : "symbol"
+              }}
+            </td>
+            <td>{{ tx.paymentMethod }}</td>
+            <td>{{ vm.details?.InvoiceId || "N/A" }}</td>
+            <td class="refund-indicator">{{ tx.refund ? "✓" : "" }}</td>
+            <td class="options">
+              <button
+                class="icon-button edit-icon"
+                title="Edit"
+                (click)="editTransaction(tx)"
+              >
+                &#x270E;
+              </button>
+              <button
+                class="icon-button delete-icon"
+                title="Delete"
+                (click)="deleteTransaction(tx)"
+              >
+                &times;
+              </button>
+            </td>
+          </tr>
+          <!-- Empty State -->
+          <tr *ngIf="vm.filteredTransactions.length === 0">
+            <td colspan="7" class="no-results">
+              No transactions found matching your criteria.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Pagination (Static for now) -->
+      <div class="pagination">
+        <button title="First Page" disabled>&lt;&lt;</button>
+        <button title="Previous Page" disabled>&lt;</button>
+        <span>Page 1 of 1</span>
+        <button title="Next Page" disabled>&gt;</button>
+        <button title="Last Page" disabled>&gt;&gt;</button>
+      </div>
+    </section>
+  </ng-container>
+</div>

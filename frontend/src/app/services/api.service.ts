@@ -51,6 +51,33 @@ export interface FinancialStatementData {
   OutstandingBalance: string;
 }
 
+// Interface for individual transaction in the history
+export interface TransactionHistoryItem {
+  id: string; // Unique identifier (e.g., 'payment-123' or 'adj-456')
+  type: 'PatientPayment' | 'InsuranceAdjudication';
+  date: string | Date;
+  amount: string;
+  paymentMethod: string;
+  referenceNumber: string | null;
+  refund: boolean;
+  paymentPlan: string | null; // Identifier for the insurance plan
+}
+
+// Interface for Prescription Detail response
+export interface PrescriptionDetailResponse {
+  prescriptionDetails: {
+    RxNum: number;
+    TherapyName: string;
+    FillDate: string | Date;
+    TotalCharge: string;
+    InsurancePaid: string;
+    PatientPortionInitial: string;
+    InvoiceId: number | null;
+  };
+  currentBalance: string;
+  transactionHistory: TransactionHistoryItem[];
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -102,8 +129,17 @@ export class ApiService {
     );
   }
 
+  // Method to get prescription details including transaction history
+  getPrescriptionDetails(
+    patientId: number,
+    rxNum: number
+  ): Observable<PrescriptionDetailResponse> {
+    return this.http.get<PrescriptionDetailResponse>(
+      `${this.apiUrl}/patients/${patientId}/prescriptions/${rxNum}/details`
+    );
+  }
+
   // --- Add other API methods here later ---
-  // e.g., getPrescriptionDetails(patientId: number, rxNum: number): Observable<any> {}
   // e.g., createPayment(paymentData: any): Observable<any> {}
   // e.g., updatePayment(paymentId: number, paymentData: any): Observable<any> {}
 }

@@ -161,7 +161,11 @@
               {{ line.Balance | currency : "USD" : "symbol" }}
             </td>
             <td class="options">
-              <button class="icon-button edit-icon" title="Edit">
+              <button
+                class="icon-button edit-icon"
+                title="View/Edit Transactions"
+                (click)="viewPrescriptionDetails(line.RxNum)"
+              >
                 &#x270E;
               </button>
               <button class="icon-button delete-icon" title="Delete">

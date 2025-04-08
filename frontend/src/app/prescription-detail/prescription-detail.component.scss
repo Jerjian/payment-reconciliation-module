@@ -1,0 +1,372 @@
+/* Base styles & Variables */
+:host {
+  display: block;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  color: #333;
+}
+
+$primary-color: #007bff;
+$border-color: #dee2e6;
+$header-bg: #f8f9fa;
+$negative-color: #dc3545;
+$positive-color: #28a745; // Green for positive balance (patient owes)
+$refund-color: $negative-color; // Use negative color for refund amounts
+
+/* General Layout & Container */
+.container {
+  padding: 20px 30px;
+}
+
+/* Page Header */
+.page-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 25px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid $border-color;
+
+  .back-button {
+    background: none;
+    border: none;
+    font-size: 2.5em;
+    cursor: pointer;
+    color: #6c757d;
+    padding: 0 15px 0 0;
+    line-height: 1;
+    &:hover {
+      color: #333;
+    }
+  }
+
+  h1 {
+    font-size: 1.8em;
+    font-weight: 500;
+    margin: 0;
+  }
+}
+
+/* Summary Section */
+.summary-section {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 15px 25px;
+  margin-bottom: 30px;
+  padding: 20px;
+  background-color: $header-bg;
+  border: 1px solid $border-color;
+  border-radius: 8px;
+
+  .summary-item {
+    label {
+      display: block;
+      font-size: 0.85em;
+      color: #6c757d;
+      margin-bottom: 4px;
+    }
+
+    span {
+      font-size: 1em;
+      font-weight: 500;
+      color: #333;
+    }
+
+    &.balance span {
+      font-size: 1.2em;
+      font-weight: bold;
+    }
+  }
+}
+
+/* Transaction History Section */
+.transaction-history {
+  h2 {
+    font-size: 1.3em;
+    font-weight: 500;
+    color: #495057;
+    margin-bottom: 20px;
+  }
+}
+
+/* Table Controls */
+.table-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding: 10px 15px;
+  background-color: $header-bg;
+  border: 1px solid $border-color;
+  border-radius: 4px;
+  gap: 15px;
+
+  .results-count {
+    font-size: 0.9em;
+    color: #6c757d;
+    margin-left: 15px; // Space after Add button
+  }
+
+  .actions-right {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+  }
+
+  .action-button {
+    padding: 6px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background-color: #fff;
+    color: #495057;
+    cursor: pointer;
+    font-size: 0.9em;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+
+    .icon {
+      font-size: 1.1em;
+    }
+
+    &:hover {
+      background-color: #e9ecef;
+    }
+
+    &.add-button {
+      background-color: $primary-color;
+      color: white;
+      border-color: $primary-color;
+      &:hover {
+        background-color: darken($primary-color, 10%);
+      }
+    }
+  }
+
+  .search-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+
+    input[type="search"] {
+      padding: 6px 12px 6px 30px; // Add padding for icon
+      border: 1px solid #ced4da;
+      border-radius: 15px;
+      font-size: 0.9em;
+      min-width: 200px;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #adb5bd;
+      font-size: 1.1em;
+    }
+  }
+
+  .page-size {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.9em;
+    color: #6c757d;
+    select {
+      padding: 5px 8px;
+      border: 1px solid #ced4da;
+      border-radius: 4px;
+      font-size: 0.9em;
+      background-color: #fff;
+    }
+  }
+}
+
+/* Table Styles */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 20px;
+  font-size: 0.9em;
+  table-layout: fixed; // Ensure columns respect widths
+
+  thead {
+    background-color: $header-bg;
+  }
+
+  th,
+  td {
+    padding: 10px 15px;
+    text-align: left;
+    border-bottom: 1px solid $border-color;
+    vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  th {
+    font-weight: 500;
+    color: #495057;
+    cursor: pointer;
+
+    .sort-icon {
+      color: #adb5bd;
+      margin-left: 5px;
+      font-size: 0.9em;
+    }
+  }
+
+  tbody tr {
+    &:hover {
+      background-color: #f1f3f5;
+    }
+    &:nth-child(even) {
+      // Keep alternating rows subtle or remove if not desired
+      background-color: #f8f9fa;
+    }
+  }
+
+  td {
+    color: #333;
+
+    &.refund-amount {
+      color: $refund-color;
+    }
+    &.refund-indicator {
+      text-align: center;
+      color: $refund-color;
+      font-weight: bold;
+    }
+  }
+
+  .options {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .icon-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.3em;
+    padding: 2px 4px;
+    margin: 0 3px;
+    color: #6c757d;
+    vertical-align: middle;
+    font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji",
+      sans-serif;
+
+    &:hover {
+      color: $primary-color;
+    }
+
+    &.delete-icon:hover {
+      color: $negative-color;
+    }
+  }
+
+  .options-header {
+    text-align: right;
+  }
+
+  // Column Widths (adjust as needed)
+  .col-plan {
+    width: 18%;
+  }
+  .col-date {
+    width: 12%;
+  }
+  .col-amount {
+    width: 12%;
+    text-align: right;
+  }
+  .col-method {
+    width: 15%;
+  }
+  .col-ref {
+    width: 20%;
+  }
+  .col-refund {
+    width: 8%;
+    text-align: center;
+  }
+  .col-options {
+    width: 15%;
+    text-align: right;
+  }
+
+  // Align amount column right
+  td.col-amount {
+    text-align: right;
+  }
+  th.col-amount {
+    text-align: right;
+  }
+  th.col-refund {
+    text-align: center;
+  }
+  td.no-results {
+    text-align: center;
+    color: #6c757d;
+    font-style: italic;
+    padding: 20px;
+  }
+}
+
+/* Pagination Styles */
+.pagination {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 10px 0;
+  font-size: 0.9em;
+  color: #6c757d;
+
+  button {
+    background: none;
+    border: 1px solid $border-color;
+    color: #6c757d;
+    padding: 5px 10px;
+    margin: 0 3px;
+    cursor: pointer;
+    border-radius: 4px;
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    &:not(:disabled):hover {
+      background-color: #e9ecef;
+    }
+  }
+
+  span {
+    margin: 0 10px;
+  }
+}
+
+/* Loading/Error Messages */
+.loading-message,
+.error-message {
+  padding: 20px;
+  text-align: center;
+  border-radius: 8px;
+  margin: 20px 0;
+  background-color: #f8f9fa;
+}
+
+.error-message {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+/* Balance Styling (used in summary and potentially elsewhere) */
+.negative-balance {
+  color: $negative-color;
+}
+
+.positive-balance {
+  color: $positive-color;
+}

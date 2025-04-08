@@ -221,4 +221,21 @@ export class PatientAccountStatementComponent implements OnInit, OnDestroy {
   goBack(): void {
     this.router.navigate(['/patients']); // Navigate to the list page
   }
+
+  // Method to navigate to the prescription detail page
+  viewPrescriptionDetails(rxNum: number): void {
+    if (this.patientId) {
+      this.router.navigate([
+        '/patients',
+        this.patientId,
+        'prescriptions',
+        rxNum,
+      ]);
+    } else {
+      console.error(
+        'Patient ID is not available to navigate to prescription details.'
+      );
+      // Optionally show an error message to the user
+    }
+  }
 }

@@ -49,7 +49,7 @@ export class PatientAccountStatementComponent implements OnInit, OnDestroy {
   private sortStateSubject = new BehaviorSubject<{
     column: SortableColumn | null;
     direction: 'asc' | 'desc';
-  }>({ column: null, direction: 'asc' });
+  }>({ column: 'RxNum', direction: 'asc' });
   sortState$ = this.sortStateSubject.asObservable();
 
   // Observable for the final view model
@@ -139,6 +139,9 @@ export class PatientAccountStatementComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    // Reset sort state to default on component initialization
+    this.sortStateSubject.next({ column: 'RxNum', direction: 'asc' });
+
     const idParam = this.route.snapshot.paramMap.get('id');
     if (idParam) {
       this.patientId = +idParam;

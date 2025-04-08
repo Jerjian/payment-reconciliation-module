@@ -51,19 +51,19 @@
       <table>
         <thead>
           <tr>
-            <th (click)="applySort('Code')">
+            <th (click)="applySort('Code')" class="col-patient-id">
               Patient ID
               <span class="sort-icon" *ngIf="sortState$ | async as state">{{
                 getSortIcon("Code", state)
               }}</span>
             </th>
-            <th (click)="applySort('FirstName')">
+            <th (click)="applySort('FirstName')" class="col-first-name">
               First Name
               <span class="sort-icon" *ngIf="sortState$ | async as state">{{
                 getSortIcon("FirstName", state)
               }}</span>
             </th>
-            <th (click)="applySort('LastName')">
+            <th (click)="applySort('LastName')" class="col-last-name">
               Last Name
               <span class="sort-icon" *ngIf="sortState$ | async as state">{{
                 getSortIcon("LastName", state)

@@ -37,7 +37,7 @@ export class PatientListComponent implements OnInit {
   private sortStateSubject = new BehaviorSubject<{
     column: SortablePatientColumn | null;
     direction: 'asc' | 'desc';
-  }>({ column: 'LastName', direction: 'asc' }); // Default sort by LastName
+  }>({ column: 'Code', direction: 'asc' }); // Default sort by Code (Patient ID)
   sortState$ = this.sortStateSubject.asObservable();
 
   // Combined view model
@@ -94,6 +94,8 @@ export class PatientListComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    // Reset sort state to default on component initialization
+    this.sortStateSubject.next({ column: 'Code', direction: 'asc' }); // Default sort by Code
     this.loadPatients();
   }
 

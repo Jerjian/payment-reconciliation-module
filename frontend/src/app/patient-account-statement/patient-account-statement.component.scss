@@ -200,6 +200,7 @@ table {
   border-collapse: collapse;
   margin-bottom: 20px;
   font-size: 0.9em;
+  table-layout: fixed;
 
   thead {
     background-color: $header-bg;
@@ -282,6 +283,20 @@ table {
   .options-header {
     text-align: right;
   }
+
+  // Define column widths
+  .col-rxnum {
+    width: 20%;
+  }
+  .col-therapy {
+    width: 40%;
+  }
+  .col-balance {
+    width: 25%;
+  }
+  .col-options {
+    width: 15%;
+  } // Give options less space
 }
 
 /* Pagination Styles */

@@ -127,25 +127,25 @@
         <thead>
           <tr>
             <!-- Add click handler and dynamic icon -->
-            <th (click)="applySort('RxNum')">
+            <th (click)="applySort('RxNum')" class="col-rxnum">
               RxNum ID
               <span class="sort-icon" *ngIf="sortState$ | async as state">{{
                 getSortIcon("RxNum", state)
               }}</span>
             </th>
-            <th (click)="applySort('TherapyName')">
+            <th (click)="applySort('TherapyName')" class="col-therapy">
               Therapy Title
               <span class="sort-icon" *ngIf="sortState$ | async as state">{{
                 getSortIcon("TherapyName", state)
               }}</span>
             </th>
-            <th (click)="applySort('Balance')">
+            <th (click)="applySort('Balance')" class="col-balance">
               Balance
               <span class="sort-icon" *ngIf="sortState$ | async as state">{{
                 getSortIcon("Balance", state)
               }}</span>
             </th>
-            <th class="options-header">Options</th>
+            <th class="options-header col-options">Options</th>
           </tr>
         </thead>
         <tbody>

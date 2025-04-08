@@ -108,7 +108,7 @@ table {
   border-collapse: collapse;
   margin-bottom: 20px;
   font-size: 0.9em;
-  // table-layout: fixed; // Keep default layout for patient list
+  table-layout: fixed; // Use fixed layout for stable widths
 
   thead {
     background-color: $header-bg;
@@ -158,6 +158,17 @@ table {
   .options {
     text-align: right;
     white-space: nowrap;
+  }
+
+  // Define column widths
+  .col-patient-id {
+    width: 25%;
+  }
+  .col-first-name {
+    width: 37.5%;
+  }
+  .col-last-name {
+    width: 37.5%;
   }
 }
 

@@ -1,0 +1,125 @@
+// Import or copy base styles/variables if needed
+$border-color: #dee2e6;
+$primary-color: #007bff;
+$negative-color: #dc3545; // For outstanding balance, potentially
+
+// --- General Layout & Container ---
+.container {
+  padding: 20px 30px;
+}
+
+// --- Page Header ---
+.page-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 25px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid $border-color;
+  flex-wrap: wrap; // Allow wrapping if needed
+
+  .back-button {
+    background: none;
+    border: none;
+    font-size: 2.5em;
+    cursor: pointer;
+    color: #6c757d;
+    padding: 0 15px 0 0;
+    line-height: 1;
+    &:hover {
+      color: #333;
+    }
+  }
+
+  h1 {
+    font-size: 1.8em;
+    font-weight: 500;
+    margin: 0;
+    margin-right: auto; // Push selectors to the right
+  }
+
+  .period-selectors {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-left: 20px; // Add some space
+
+    select {
+      padding: 5px 8px;
+      border: 1px solid #ced4da;
+      border-radius: 4px;
+      font-size: 0.95em;
+      background-color: #fff;
+    }
+  }
+}
+
+// --- Section Styles ---
+.statement-details {
+  h2 {
+    font-size: 1.3em;
+    font-weight: 500;
+    color: #495057;
+    margin-bottom: 20px;
+  }
+
+  .details-grid {
+    display: grid;
+    grid-template-columns: repeat(
+      auto-fit,
+      minmax(250px, 1fr)
+    ); // Responsive grid
+    gap: 25px;
+    background-color: #f8f9fa;
+    padding: 25px;
+    border: 1px solid $border-color;
+    border-radius: 6px;
+
+    label {
+      display: block;
+      font-size: 0.9em;
+      color: #6c757d;
+      margin-bottom: 6px;
+    }
+
+    span {
+      font-size: 1.3em; // Larger data display
+      font-weight: 500;
+      color: #333;
+    }
+
+    .outstanding-balance {
+      color: $negative-color; // Style outstanding balance distinctly
+    }
+  }
+}
+
+// --- Loading/Error Messages ---
+.loading-message,
+.error-message,
+.no-data-message {
+  padding: 20px;
+  text-align: center;
+  border-radius: 8px;
+  margin: 20px 0;
+  background-color: #f8f9fa;
+  border: 1px solid $border-color;
+}
+
+.loading-message {
+  color: $primary-color;
+}
+
+.error-message {
+  background-color: #f8d7da;
+  color: #721c24;
+  border-color: #f5c6cb;
+
+  h2 {
+    font-size: 1.2em;
+    margin-bottom: 10px;
+    color: inherit;
+  }
+  p {
+    margin: 0;
+  }
+}

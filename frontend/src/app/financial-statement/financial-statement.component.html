@@ -1,0 +1,87 @@
+<div class="container">
+  <!-- Page Header -->
+  <div class="page-header">
+    <button class="back-button" title="Back to Patients" (click)="goBack()">
+      &#x2190;
+    </button>
+    <h1>Financial Statement</h1>
+    <!-- Period Selectors -->
+    <div class="period-selectors">
+      <select [(ngModel)]="selectedMonth" title="Select Month">
+        <option *ngFor="let month of availableMonths" [value]="month.value">
+          {{ month.name }}
+        </option>
+      </select>
+      <select [(ngModel)]="selectedYear" title="Select Year">
+        <option *ngFor="let year of availableYears" [value]="year">
+          {{ year }}
+        </option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Loading/Error Indicators -->
+  <div *ngIf="isLoading && !error" class="loading-message">
+    Loading financial statement...
+  </div>
+  <div *ngIf="error" class="error-message">
+    <h2>Error Loading Data</h2>
+    <p>{{ error }}</p>
+  </div>
+
+  <!-- Display data -->
+  <ng-container *ngIf="!isLoading && (statementData$ | async) as statement">
+    <section class="statement-details">
+      <!-- Display selected period or statement period -->
+      <h2>
+        Statement for Period:
+        <span *ngIf="statement.StartDate && statement.EndDate">
+          {{ statement.StartDate | date : "yyyy-MM-dd" }} to
+          {{ statement.EndDate | date : "yyyy-MM-dd" }}
+        </span>
+        <span *ngIf="!statement.StartDate || !statement.EndDate">
+          {{ selectedMonth | number : "2.0" }}-{{ selectedYear }}
+        </span>
+      </h2>
+
+      <div class="details-grid">
+        <div>
+          <label>Total Revenue</label>
+          <span>{{
+            statement.TotalRevenue | currency : "USD" : "symbol"
+          }}</span>
+        </div>
+        <div>
+          <label>Insurance Payments Received</label>
+          <span>{{
+            statement.InsurancePayments | currency : "USD" : "symbol"
+          }}</span>
+        </div>
+        <div>
+          <label>Patient Payments Received</label>
+          <span>{{
+            statement.PatientPayments | currency : "USD" : "symbol"
+          }}</span>
+        </div>
+        <div>
+          <label>Total Outstanding Balance (AR)</label>
+          <span class="outstanding-balance">{{
+            statement.OutstandingBalance | currency : "USD" : "symbol"
+          }}</span>
+        </div>
+      </div>
+    </section>
+  </ng-container>
+
+  <!-- Handle case where statement is null after loading/error -->
+  <div
+    *ngIf="!isLoading && !(statementData$ | async) && !error"
+    class="no-data-message"
+  >
+    <p>
+      No financial statement data found for the selected period ({{
+        selectedMonth | number : "2.0"
+      }}-{{ selectedYear }}).
+    </p>
+  </div>
+</div>

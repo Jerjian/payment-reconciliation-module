@@ -233,3 +233,17 @@ table {
     margin: 0;
   }
 }
+
+// Style for general action buttons if needed (like the new one)
+.action-button {
+  padding: 6px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  background-color: #fff;
+  color: #495057;
+  cursor: pointer;
+  font-size: 0.9em;
+  &:hover {
+    background-color: #e9ecef;
+  }
+}

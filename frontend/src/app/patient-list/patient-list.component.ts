@@ -151,4 +151,9 @@ export class PatientListComponent implements OnInit {
   viewPatientStatement(patientId: number): void {
     this.router.navigate(['/patients', patientId, 'account-statement']);
   }
+
+  // Navigate to financial statement page
+  viewFinancialStatement(): void {
+    this.router.navigate(['/financial-statement']);
+  }
 }

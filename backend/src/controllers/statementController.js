@@ -7,6 +7,7 @@ const {
   parseISO,
   subMonths,
   format,
+  isValid,
 } = require("date-fns");
 
 // Get all Monthly Statements (potentially filter later)
@@ -27,46 +28,68 @@ exports.getMonthlyStatements = async (req, res) => {
   }
 };
 
-// Get Financial Statements (Calculated Real-Time for a given period)
+// Get Financial Statements (Reads from table based on query params)
 exports.getFinancialStatements = async (req, res) => {
   try {
-    // Get period from query params, default to current month
-    let startDate, endDate;
-    if (req.query.startDate && req.query.endDate) {
-      // Basic validation - could add more robust date parsing/validation
-      startDate = parseISO(req.query.startDate);
-      endDate = parseISO(req.query.endDate);
-      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-        return res.status(400).json({
-          message:
-            "Invalid startDate or endDate query parameter format. Use ISO 8601 (e.g., YYYY-MM-DD).",
-        });
+    let whereClause = {};
+    const { year, month, startDate } = req.query; // Accept year/month or startDate
+
+    if (year && month) {
+      const targetMonth = parseInt(month, 10);
+      const targetYear = parseInt(year, 10);
+      if (
+        !isNaN(targetYear) &&
+        !isNaN(targetMonth) &&
+        targetMonth >= 1 &&
+        targetMonth <= 12
+      ) {
+        const startOfMonthDate = new Date(targetYear, targetMonth - 1, 1);
+        const endOfMonthDate = endOfMonth(startOfMonthDate);
+        // Query based on statement's EndDate falling within the month
+        // Adjust if your table stores year/month columns directly
+        whereClause = {
+          EndDate: {
+            [Op.between]: [startOfMonthDate, endOfMonthDate],
+          },
+        };
       }
-      // Ensure endDate is end of day for accurate comparison if time isn't specified
-      endDate.setHours(23, 59, 59, 999);
-    } else {
-      // Default to current month
-      const today = new Date();
-      startDate = startOfMonth(today);
-      endDate = endOfMonth(today);
+    } else if (startDate) {
+      const parsedStartDate = parseISO(startDate);
+      if (isValid(parsedStartDate)) {
+        // Check if date is valid
+        const startOfMonthDate = startOfMonth(parsedStartDate);
+        const endOfMonthDate = endOfMonth(startOfMonthDate);
+        whereClause = {
+          EndDate: {
+            [Op.between]: [startOfMonthDate, endOfMonthDate],
+          },
+        };
+      }
     }
 
-    console.log(
-      `Calculating financial statement for period: ${startDate.toISOString()} - ${endDate.toISOString()}`
-    );
+    // Find the statement matching the criteria, or the latest if no criteria
+    const statement = await FinancialStatement.findOne({
+      where: whereClause,
+      order: [["StatementDate", "DESC"]], // Get the latest matching one / overall latest
+    });
 
-    // Calculate financial data in real-time using the helper
-    const statementData = await calculateFinancialStatementData(
-      startDate,
-      endDate
-    );
+    if (!statement) {
+      const periodStr =
+        year && month ? `${month}/${year}` : "the requested period";
+      return res.status(404).json({
+        message: `No financial statement found for ${periodStr}.`,
+        // Optionally return default zero object if preferred over 404
+        // StatementDate: null, StartDate: null, EndDate: null,
+        // TotalRevenue: "0.00", InsurancePayments: "0.00",
+        // PatientPayments: "0.00", OutstandingBalance: "0.00"
+      });
+    }
 
-    // Since we calculate for a period, we always return one statement object
-    res.status(200).json(statementData);
+    res.status(200).json(statement);
   } catch (error) {
-    console.error("Error calculating financial statements:", error);
+    console.error("Error fetching financial statements from table:", error);
     res.status(500).json({
-      message: "Error calculating financial statements",
+      message: "Error fetching financial statements",
       error: error.message,
     });
   }

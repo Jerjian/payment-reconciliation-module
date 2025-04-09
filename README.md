@@ -2,8 +2,6 @@
 
 This project provides a web application for reconciling patient payments against pharmacy prescription data, specifically integrating with data structures similar to those found in Kroll pharmacy systems. It features a Node.js/Express/Sequelize backend API and an Angular frontend.
 
-_(Note: This project was initially planned using Python/SQLAlchemy but was transitioned to Node.js/Sequelize)._
-
 ## Overview
 
 The application allows users to:

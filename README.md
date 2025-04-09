@@ -96,7 +96,8 @@ Follow these steps to set up the project on a new machine.
     ```
 4.  **Create `.env` file:** Create a file named `.env` in the `backend` directory with the following content (this configures SQLite):
     ```dotenv
-    # backend/.env
+    PORT=3000
+    NODE_ENV=development
     DB_STORAGE=src/pharmacy.db
     ```
 5.  **Database Setup (Migrations & Seeding):**
@@ -162,11 +163,10 @@ Follow these steps to set up the project on a new machine.
 - `GET /api/statements/monthly/patient/:patientId/:year/:month`: Get calculated statement data for a specific month/year for a patient.
 - `GET /api/statements/financial?startDate=YYYY-MM-DD`: Get the stored financial statement record matching the period containing the `startDate`. (If no `startDate`, fetches the latest stored statement).
 
-## Current Limitations / Next Steps
+## Current Limitations
 
-- **Automatic Invoice Creation:** The system relies on the seeder to create `Invoice` records. Logic to automatically create/update invoices based on new Kroll prescription/adjudication data is not implemented.
-- **Historical Statement Accuracy:** Real-time calculation of monthly statements relies on accurate opening balances, which implicitly depend on past calculations or stored data. Deep historical calculations might be needed for full accuracy if data is missing or incorrect.
+- **Automatic Invoice Creation:** The system relies on the seeder to create `Invoice` records. If we were to new KrollRxPrescription (out of scope) then logic to automatically create/update invoices based on new Kroll prescription/adjudication data is would be needed.
 - **Testing:** More comprehensive integration and end-to-end tests are recommended. Frontend testing is minimal.
 - **Error Handling/Validation:** Can be further enhanced on both backend and frontend.
-- **Authentication/Authorization:** Not currently implemented.
-- **UI Enhancements:** Add features like pagination, advanced filtering/sorting, export functionality, etc.
+- **Authentication/Authorization:** Not currently implemented. (out of scope)
+- **UI Enhancements:** Add features like pagination, advanced filtering/sorting, export functionality, etc. (out of scope)

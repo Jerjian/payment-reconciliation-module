@@ -144,8 +144,11 @@
           <tr *ngFor="let tx of vm.filteredTransactions">
             <td>{{ tx.paymentPlan || "Patient Payment" }}</td>
             <td>{{ tx.date | date : "MM.dd.yyyy" }}</td>
-            <!-- Apply styling for refunds -->
-            <td [class.refund-amount]="tx.refund">
+            <!-- Apply styling for refunds AND zero amounts -->
+            <td
+              [class.refund-amount]="tx.refund && +tx.amount !== 0"
+              [class.zero-amount]="!tx.refund && +tx.amount === 0"
+            >
               {{
                 (tx.refund ? -1 : 1) * +tx.amount | currency : "USD" : "symbol"
               }}
@@ -158,6 +161,7 @@
                 class="icon-button edit-icon"
                 title="Edit"
                 (click)="editTransaction(tx)"
+                [disabled]="tx.type !== 'PatientPayment'"
               >
                 &#x270E;
               </button>
@@ -165,6 +169,7 @@
                 class="icon-button delete-icon"
                 title="Delete"
                 (click)="deleteTransaction(tx)"
+                [disabled]="tx.type !== 'PatientPayment'"
               >
                 &times;
               </button>

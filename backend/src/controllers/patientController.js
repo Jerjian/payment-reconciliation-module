@@ -77,7 +77,7 @@ exports.getPatientAccountStatement = async (req, res) => {
             {
               model: db.Payment,
               as: "payments",
-              attributes: ["Amount"], // Only need amount for balance calculation
+              attributes: ["Amount", "isRefund"], // Fetch isRefund
             },
           ],
         },
@@ -96,16 +96,17 @@ exports.getPatientAccountStatement = async (req, res) => {
         }
 
         const invoice = rx.invoice;
-        const totalPaidByPatient = invoice.payments.reduce(
-          (sum, payment) => sum + parseFloat(payment.Amount || 0),
-          0
-        );
+        // Correctly calculate total paid by patient for THIS invoice, considering refunds
+        const totalPaidByPatient = invoice.payments.reduce((sum, payment) => {
+          const paymentAmount = parseFloat(payment.Amount || 0);
+          return sum + (payment.isRefund ? -paymentAmount : paymentAmount);
+        }, 0);
 
-        // Balance for this specific prescription (patient portion minus what they've paid)
+        // Balance for this specific prescription (patient portion minus what they've paid net of refunds)
         const lineBalance =
           parseFloat(invoice.PatientPortion || 0) - totalPaidByPatient;
 
-        totalPatientBalance += lineBalance;
+        totalPatientBalance += lineBalance; // Accumulate the CORRECT line balance
 
         return {
           RxNum: rx.RxNum,
@@ -263,10 +264,13 @@ exports.getPrescriptionDetails = async (req, res) => {
         transactionTimeline.push({
           type: "InsuranceAdjudication",
           date: adj.AdjDate || rxPlan.AdjDate, // Use adjustment date, fallback to plan adj date
-          amount: parseFloat(adj.PlanPays).toFixed(2),
+          amount: parseFloat(adj.PlanPays || 0).toFixed(2), // Ensure amount is captured even if 0
           paymentMethod: "Insurance", // Or derive from Plan details if needed
           referenceNumber: adj.RefNum || adj.TraceNum, // Use RefNum or TraceNum
-          refund: adj.ResultCode !== "PAY", // Consider anything not 'PAY' as potentially non-payment/refund/rejection?
+          // Refined Refund Logic: Only mark as refund if it's explicitly known to be one.
+          // For now, assume non-paying adjudications are not refunds.
+          // TODO: Identify specific ResultCode values that indicate a reversal/refund if necessary.
+          refund: false, // Default to false for adjudications
           paymentPlan: planIdentifier,
           id: `adj-${adj.id}`,
         });
@@ -277,13 +281,23 @@ exports.getPrescriptionDetails = async (req, res) => {
     transactionTimeline.sort((a, b) => new Date(a.date) - new Date(b.date));
 
     // 5. Calculate Current Balance for this Prescription
-    const totalPaidByPatient = patientPayments.reduce(
-      (sum, payment) => sum + parseFloat(payment.Amount || 0),
-      0
-    );
+    // Fetch ALL payment records including the isRefund flag
+    const allPaymentsForInvoice = invoiceId
+      ? await db.Payment.findAll({
+          where: { InvoiceId: invoiceId, TransactionStatus: "completed" }, // Ensure only completed
+          attributes: ["Amount", "isRefund"], // Fetch necessary fields
+          raw: true,
+        })
+      : [];
+
+    const totalPaidByPatient = allPaymentsForInvoice.reduce((sum, payment) => {
+      const paymentAmount = parseFloat(payment.Amount || 0);
+      return sum + (payment.isRefund ? -paymentAmount : paymentAmount);
+    }, 0);
+
     const currentPrescriptionBalance = prescription.invoice
       ? parseFloat(prescription.invoice.PatientPortion || 0) -
-        totalPaidByPatient
+        totalPaidByPatient // Corrected calculation
       : 0; // If no invoice, patient portion is 0
 
     // 6. Format Response

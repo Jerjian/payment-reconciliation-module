@@ -233,6 +233,10 @@ table {
     &.refund-amount {
       color: $refund-color;
     }
+    &.zero-amount {
+      color: #999; // Dim color for zero amounts
+      font-style: italic;
+    }
     &.refund-indicator {
       text-align: center;
       color: $refund-color;

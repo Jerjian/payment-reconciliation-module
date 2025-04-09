@@ -226,19 +226,21 @@ async function calculateStatementData(patientId, startDate, endDate) {
   });
   const totalCharges = parseFloat(chargesResult.totalCharges || 0);
 
-  // 3. Calculate Total Payments (Sum of payments dated within the month)
-  const paymentsResult = await db.Payment.findOne({
-    attributes: [
-      [db.sequelize.fn("SUM", db.sequelize.col("Amount")), "totalPayments"],
-    ],
+  // 3. Calculate Total Payments (Sum of payments - refunds dated within the month)
+  const paymentRecords = await db.Payment.findAll({
+    attributes: ["Amount", "isRefund"],
     where: {
       PatientId: patientId,
       PaymentDate: { [Op.between]: [startDate, endDate] },
       TransactionStatus: "completed",
     },
     raw: true,
+    // No transaction needed here as this is a read-only calculation for display
   });
-  const totalPayments = parseFloat(paymentsResult.totalPayments || 0);
+  const totalPayments = paymentRecords.reduce((sum, p) => {
+    const paymentAmount = parseFloat(p.Amount || 0);
+    return sum + (p.isRefund ? -paymentAmount : paymentAmount);
+  }, 0);
 
   // 4. Calculate Closing Balance
   const closingBalance = openingBalance + totalCharges - totalPayments;

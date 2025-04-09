@@ -197,18 +197,41 @@ exports.getMonthlyStatementForPatientByMonth = async (req, res) => {
 
 // Helper function to calculate statement data for a patient and period
 async function calculateStatementData(patientId, startDate, endDate) {
-  // 1. Calculate Opening Balance (Closing balance of the previous month)
-  const prevMonthEndDate = new Date(startDate.getTime() - 1); // Last millisecond of previous month
-  const prevStatement = await MonthlyStatement.findOne({
+  // 1. Calculate Opening Balance dynamically
+  // Sum of all patient portions for invoices BEFORE startDate
+  const priorChargesResult = await db.Invoice.findOne({
+    attributes: [
+      [
+        db.sequelize.fn("SUM", db.sequelize.col("PatientPortion")),
+        "totalPriorCharges",
+      ],
+    ],
     where: {
       PatientId: patientId,
-      EndDate: { [Op.lt]: startDate },
+      InvoiceDate: { [Op.lt]: startDate }, // Invoices dated *before* the start date
     },
-    order: [["EndDate", "DESC"]],
+    raw: true,
   });
-  const openingBalance = prevStatement
-    ? parseFloat(prevStatement.ClosingBalance)
-    : 0.0;
+  const totalPriorCharges = parseFloat(
+    priorChargesResult.totalPriorCharges || 0
+  );
+
+  // Sum of all payments (net refunds) BEFORE startDate
+  const priorPaymentRecords = await db.Payment.findAll({
+    attributes: ["Amount", "isRefund"],
+    where: {
+      PatientId: patientId,
+      PaymentDate: { [Op.lt]: startDate }, // Payments dated *before* the start date
+      TransactionStatus: "completed",
+    },
+    raw: true,
+  });
+  const totalPriorPayments = priorPaymentRecords.reduce((sum, p) => {
+    const paymentAmount = parseFloat(p.Amount || 0);
+    return sum + (p.isRefund ? -paymentAmount : paymentAmount);
+  }, 0);
+
+  const openingBalance = totalPriorCharges - totalPriorPayments;
 
   // 2. Calculate Total Charges (Sum of PatientPortion for invoices dated within the month)
   const chargesResult = await db.Invoice.findOne({

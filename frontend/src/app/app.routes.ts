@@ -34,5 +34,13 @@ export const routes: Routes = [
         (m) => m.FinancialStatementComponent
       ),
   },
+  // New Route for Patient Monthly Statements
+  {
+    path: 'patients/:id/monthly-statements',
+    loadComponent: () =>
+      import(
+        './patient-monthly-statement/patient-monthly-statement.component'
+      ).then((m) => m.PatientMonthlyStatementComponent),
+  },
   // Add other routes here in the future
 ];

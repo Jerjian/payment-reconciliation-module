@@ -41,6 +41,29 @@ $negative-color: #dc3545;
     font-size: 1.8em;
     font-weight: 500;
     margin: 0;
+    margin-right: auto; /* Push button to the right */
+  }
+
+  .action-button {
+    /* General style for action buttons */
+    padding: 6px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background-color: $primary-color;
+    color: white;
+    cursor: pointer;
+    font-size: 0.9em;
+    text-align: center;
+    white-space: nowrap;
+
+    &:hover {
+      background-color: darken($primary-color, 10%);
+    }
+  }
+
+  .view-monthly-button {
+    /* Specific adjustments if needed, otherwise inherits action-button */
+    margin-left: 20px; /* Add space between title and button */
   }
 
   .export-button {

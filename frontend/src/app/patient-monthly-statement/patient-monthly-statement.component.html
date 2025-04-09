@@ -1,0 +1,63 @@
+<div class="container" *ngIf="viewData$ | async as viewData">
+  <!-- Page Header -->
+  <div class="page-header">
+    <button class="back-button" title="Back" (click)="goBack()">
+      &#x2190;
+    </button>
+    <h1>
+      Monthly Statements -
+      {{ viewData.patientName || "Patient " + (patientId || "") }}
+    </h1>
+  </div>
+
+  <!-- Loading/Error Indicators -->
+  <div *ngIf="isLoading" class="loading-message">Loading statements...</div>
+  <div *ngIf="error" class="error-message">
+    <h2>Error Loading Data</h2>
+    <p>{{ error }}</p>
+  </div>
+
+  <!-- Statements Table -->
+  <ng-container
+    *ngIf="!isLoading && viewData.statements && viewData.statements.length > 0"
+  >
+    <table>
+      <thead>
+        <tr>
+          <th>Statement Period</th>
+          <th>Opening Balance</th>
+          <th>Total Charges</th>
+          <th>Total Payments</th>
+          <th>Closing Balance</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let statement of viewData.statements">
+          <td>
+            {{ formatDateRange(statement.StartDate, statement.EndDate) }}
+          </td>
+          <td>
+            {{ statement.OpeningBalance | currency : "USD" : "symbol" }}
+          </td>
+          <td>{{ statement.TotalCharges | currency : "USD" : "symbol" }}</td>
+          <td>{{ statement.TotalPayments | currency : "USD" : "symbol" }}</td>
+          <td>
+            {{ statement.ClosingBalance | currency : "USD" : "symbol" }}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </ng-container>
+
+  <!-- No Statements Message -->
+  <div
+    *ngIf="
+      !isLoading &&
+      (!viewData.statements || viewData.statements.length === 0) &&
+      !error
+    "
+    class="no-data-message"
+  >
+    <p>No monthly statements found for this patient.</p>
+  </div>
+</div>

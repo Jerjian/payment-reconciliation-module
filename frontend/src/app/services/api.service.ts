@@ -99,6 +99,18 @@ export interface Payment extends PaymentRequestBody {
   updatedAt?: string | Date;
 }
 
+// Interface for Patient Monthly Statement Data
+export interface PatientMonthlyStatement {
+  PatientId: number;
+  StatementDate: string | Date;
+  StartDate: string | Date;
+  EndDate: string | Date;
+  OpeningBalance: string;
+  TotalCharges: string;
+  TotalPayments: string;
+  ClosingBalance: string;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -121,6 +133,13 @@ export class ApiService {
   // Method to get all patients
   getAllPatients(): Observable<PatientListItem[]> {
     return this.http.get<PatientListItem[]>(`${this.apiUrl}/patients`);
+  }
+
+  // Method to get basic patient details by ID
+  getPatientDetails(patientId: number): Observable<PatientDetails> {
+    return this.http.get<PatientDetails>(
+      `${this.apiUrl}/patients/${patientId}`
+    );
   }
 
   // Method to get the financial statement
@@ -177,6 +196,15 @@ export class ApiService {
   deletePayment(paymentId: number): Observable<void> {
     // Expecting a 204 No Content response, hence Observable<void>
     return this.http.delete<void>(`${this.apiUrl}/payments/${paymentId}`);
+  }
+
+  // Method to get monthly statements for a specific patient (last 12 months)
+  getPatientMonthlyStatements(
+    patientId: number
+  ): Observable<PatientMonthlyStatement[]> {
+    return this.http.get<PatientMonthlyStatement[]>(
+      `${this.apiUrl}/statements/monthly/patient/${patientId}`
+    );
   }
 
   // --- Add other API methods here later ---

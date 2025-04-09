@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
@@ -29,7 +29,7 @@ type SortableColumn = 'RxNum' | 'TherapyName' | 'Balance';
 @Component({
   selector: 'app-patient-account-statement',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterModule],
   templateUrl: './patient-account-statement.component.html',
   styleUrl: './patient-account-statement.component.scss',
 })

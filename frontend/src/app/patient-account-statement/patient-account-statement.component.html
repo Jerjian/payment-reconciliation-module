@@ -8,6 +8,15 @@
     <h1 *ngIf="viewModel$ | async as vm">
       {{ vm?.patientDetails?.FirstName }} {{ vm?.patientDetails?.LastName }}
     </h1>
+    <!-- Add navigation button here -->
+    <button
+      *ngIf="patientId"
+      class="action-button view-monthly-button"
+      [routerLink]="['/patients', patientId, 'monthly-statements']"
+      title="View Monthly Statements"
+    >
+      View Monthly Statements
+    </button>
   </div>
 
   <!-- Check for errors -->

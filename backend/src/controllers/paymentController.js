@@ -1,7 +1,8 @@
 const db = require("../models");
-const { Payment, Invoice, FinancialStatement } = db;
+const { Payment, Invoice, FinancialStatement, MonthlyStatement } = db;
 const { Op } = require("sequelize"); // Import Op for summation
 const { startOfMonth, endOfMonth, parseISO, isValid } = require("date-fns"); // Add date-fns
+const { updateMonthlyStatementForMonth } = require("./statementController"); // Import the helper
 
 // Helper function to update financial statement for a given month
 // (Copied and adapted from statementController - needs transaction param)
@@ -52,8 +53,19 @@ async function updateFinancialStatementForMonth(year, month, transaction) {
     }, 0);
 
     // Outstanding balance calculation (Simplified: total patient portion minus total paid for invoices *up to* end date)
-    const outstandingInvoices = await Invoice.findAll({
-      attributes: ["PatientPortion", "AmountPaid"],
+    const outstandingResult = await Invoice.findOne({
+      attributes: [
+        [
+          db.sequelize.fn(
+            "SUM",
+            // Ensure correct casting for subtraction across different DB types
+            db.sequelize.literal(
+              "CAST(COALESCE(PatientPortion, 0) AS DECIMAL(10,2)) - CAST(COALESCE(AmountPaid, 0) AS DECIMAL(10,2))"
+            )
+          ),
+          "totalOutstanding",
+        ],
+      ],
       where: {
         InvoiceDate: { [Op.lte]: endDate }, // Invoices up to the end of the month
         Status: { [Op.notIn]: ["paid"] }, // Not fully paid
@@ -61,11 +73,11 @@ async function updateFinancialStatementForMonth(year, month, transaction) {
       transaction,
       raw: true,
     });
-    const totalOutstanding = outstandingInvoices.reduce((sum, inv) => {
-      const patientPortion = parseFloat(inv.PatientPortion || 0);
-      const amountPaid = parseFloat(inv.AmountPaid || 0);
-      return sum + (patientPortion - amountPaid);
-    }, 0.0);
+    // Ensure outstanding balance isn't negative
+    const totalOutstanding = Math.max(
+      0,
+      parseFloat(outstandingResult?.totalOutstanding || 0)
+    );
 
     const statementData = {
       StatementDate: endDate,
@@ -76,7 +88,7 @@ async function updateFinancialStatementForMonth(year, month, transaction) {
         insuranceResult?.totalInsurance || 0
       ).toFixed(2),
       PatientPayments: totalPatientPayments.toFixed(2),
-      OutstandingBalance: Math.max(0, totalOutstanding).toFixed(2), // Ensure non-negative balance
+      OutstandingBalance: totalOutstanding.toFixed(2), // Use calculated non-negative outstanding
     };
 
     // Upsert the record for the month
@@ -90,23 +102,35 @@ async function updateFinancialStatementForMonth(year, month, transaction) {
     });
 
     if (existingStatement) {
-      await FinancialStatement.update(statementData, {
-        where: { id: existingStatement.id },
-        transaction,
-      });
-      console.log(`Updated financial statement for ${month}/${year}`);
+      // Only update if data has changed (optional optimization)
+      if (
+        JSON.stringify(existingStatement.get({ plain: true })) !==
+        JSON.stringify({
+          ...statementData,
+          id: existingStatement.id,
+          createdAt: existingStatement.createdAt,
+        })
+      ) {
+        await FinancialStatement.update(statementData, {
+          where: { id: existingStatement.id },
+          transaction,
+        });
+        console.log(`Updated global financial statement for ${month}/${year}`);
+      } else {
+        console.log(
+          `No changes detected for global financial statement ${month}/${year}. Skipping update.`
+        );
+      }
     } else {
       await FinancialStatement.create(statementData, { transaction });
-      console.log(`Created financial statement for ${month}/${year}`);
+      console.log(`Created global financial statement for ${month}/${year}`);
     }
   } catch (error) {
     console.error(
-      `Error calculating/upserting financial statement for ${month}/${year}:`,
+      `Error calculating/upserting global financial statement for ${month}/${year}:`,
       error
     );
-    // Decide if this error should cause the main transaction to rollback
-    // For now, we log it but allow the payment operation to succeed potentially
-    // To force rollback, re-throw the error here: throw error;
+    throw error; // Re-throw to ensure transaction rollback
   }
 }
 
@@ -151,6 +175,7 @@ exports.createPayment = async (req, res) => {
         .status(404)
         .json({ message: `Invoice with ID ${invoiceId} not found.` });
     }
+    const patientId = invoice.PatientId; // Get patient ID
 
     // 2. Create the Payment record
     const newPayment = await Payment.create(
@@ -213,7 +238,7 @@ exports.createPayment = async (req, res) => {
       transaction
     );
 
-    // 5. Update all subsequent Financial Statements within the same transaction
+    // 5. Update all subsequent Global Financial Statements within the same transaction
     try {
       const paymentMonthStartForCascade = startOfMonth(paymentDateObj);
 
@@ -227,7 +252,7 @@ exports.createPayment = async (req, res) => {
       });
 
       console.log(
-        `Found ${subsequentStatements.length} subsequent statements to update.`
+        `Found ${subsequentStatements.length} subsequent global statements to update.`
       );
 
       // Recalculate each subsequent statement
@@ -235,7 +260,7 @@ exports.createPayment = async (req, res) => {
         const statementYear = statement.StartDate.getFullYear();
         const statementMonth = statement.StartDate.getMonth() + 1;
         console.log(
-          `Updating subsequent statement for ${statementMonth}/${statementYear}`
+          `Updating subsequent global statement for ${statementMonth}/${statementYear}`
         );
         // Pass the existing transaction
         await updateFinancialStatementForMonth(
@@ -246,11 +271,57 @@ exports.createPayment = async (req, res) => {
       }
     } catch (cascadeError) {
       console.error(
-        "Error during subsequent financial statement updates:",
+        "Error during subsequent global financial statement updates:",
         cascadeError
       );
       // Let the main error handler catch and rollback
       throw cascadeError;
+    }
+
+    // --- NEW: Update Patient Monthly Statement ---
+    console.log(
+      `Triggering monthly statement update for patient ${patientId} due to new payment.`
+    );
+    await updateMonthlyStatementForMonth(
+      patientId,
+      paymentYear,
+      paymentMonth,
+      transaction
+    );
+
+    // --- NEW: Cascade Update for Patient's Subsequent Monthly Statements ---
+    try {
+      const paymentMonthStartForCascade = startOfMonth(paymentDateObj);
+      const subsequentPatientStatements = await MonthlyStatement.findAll({
+        where: {
+          PatientId: patientId, // Specific to this patient
+          StartDate: { [Op.gt]: paymentMonthStartForCascade },
+        },
+        order: [["StartDate", "ASC"]],
+        transaction,
+      });
+      console.log(
+        `Found ${subsequentPatientStatements.length} subsequent monthly statements for patient ${patientId} to update.`
+      );
+      for (const statement of subsequentPatientStatements) {
+        const statementYear = statement.StartDate.getFullYear();
+        const statementMonth = statement.StartDate.getMonth() + 1;
+        console.log(
+          `Updating subsequent monthly statement for patient ${patientId} - ${statementMonth}/${statementYear}`
+        );
+        await updateMonthlyStatementForMonth(
+          patientId,
+          statementYear,
+          statementMonth,
+          transaction
+        );
+      }
+    } catch (cascadeError) {
+      console.error(
+        `Error during subsequent patient monthly statement updates (create):`,
+        cascadeError
+      );
+      throw cascadeError; // Ensure transaction rollback
     }
 
     await transaction.commit(); // Commit the transaction
@@ -290,6 +361,8 @@ exports.updatePayment = async (req, res) => {
     amount === undefined &&
     paymentDate === undefined &&
     paymentMethod === undefined &&
+    referenceNumber === undefined && // include all updatable fields
+    notes === undefined &&
     isRefund === undefined
   ) {
     return res.status(400).json({ message: "No update fields provided." });
@@ -299,9 +372,12 @@ exports.updatePayment = async (req, res) => {
   if (amount !== undefined) {
     absAmount = Math.abs(parseFloat(amount));
     if (isNaN(absAmount) || absAmount <= 0) {
+      // Allow 0 amount conceptually, but maybe not useful? Sticking with > 0
       return res
         .status(400)
-        .json({ message: "Invalid amount format or value." });
+        .json({
+          message: "Invalid amount format or value. Amount must be positive.",
+        });
     }
   }
 
@@ -320,18 +396,27 @@ exports.updatePayment = async (req, res) => {
     // Store the original invoiceId and date before potential update
     const originalInvoiceId = payment.InvoiceId;
     const originalPaymentDate = new Date(payment.PaymentDate); // Ensure it's a Date object
+    const patientId = payment.PatientId; // Get patient ID
 
     // 2. Update the Payment record fields selectively
-    if (absAmount !== undefined) payment.Amount = absAmount;
-    if (paymentDate !== undefined) payment.PaymentDate = paymentDate;
-    if (paymentMethod !== undefined) payment.PaymentMethod = paymentMethod;
+    const updateData = {};
+    if (absAmount !== undefined) updateData.Amount = absAmount;
+    if (paymentDate !== undefined) updateData.PaymentDate = paymentDate;
+    if (paymentMethod !== undefined) updateData.PaymentMethod = paymentMethod;
     if (referenceNumber !== undefined)
-      payment.ReferenceNumber = referenceNumber; // Allow setting to null/empty
-    if (notes !== undefined) payment.Notes = notes; // Allow setting to null/empty
-    if (isRefund !== undefined) payment.isRefund = !!isRefund;
-    // Note: We generally don't allow changing InvoiceId or PatientId via update
+      updateData.ReferenceNumber = referenceNumber;
+    if (notes !== undefined) updateData.Notes = notes;
+    if (isRefund !== undefined) updateData.isRefund = !!isRefund;
 
-    await payment.save({ transaction }); // Save the changes to the payment record
+    // Only save if there are changes
+    if (Object.keys(updateData).length > 0) {
+      await payment.update(updateData, { transaction }); // Use update method
+      console.log(`Payment ${paymentId} updated.`);
+    } else {
+      console.log(
+        `No changes provided for payment ${paymentId}. Skipping save.`
+      );
+    }
 
     // 3. Recalculate and Update the associated Invoice AmountPaid and Status
     // Use the originalInvoiceId to ensure we update the correct invoice
@@ -371,13 +456,24 @@ exports.updatePayment = async (req, res) => {
       newStatus = "pending";
     }
 
-    await Invoice.update(
-      { AmountPaid: totalPaid.toFixed(2), Status: newStatus },
-      { where: { id: originalInvoiceId }, transaction }
-    );
+    // Only update invoice if status or amount paid actually changed
+    if (
+      invoice.Status !== newStatus ||
+      parseFloat(invoice.AmountPaid) !== totalPaid
+    ) {
+      await Invoice.update(
+        { AmountPaid: totalPaid.toFixed(2), Status: newStatus },
+        { where: { id: originalInvoiceId }, transaction }
+      );
+      console.log(`Invoice ${originalInvoiceId} status/amount updated.`);
+    } else {
+      console.log(
+        `No change needed for Invoice ${originalInvoiceId} status/amount.`
+      );
+    }
 
-    // 4. Update Financial Statements for affected months
-    const newPaymentDate = new Date(payment.PaymentDate); // Ensure it's a Date object
+    // 4. Update Global Financial Statements for affected months
+    const newPaymentDate = new Date(payment.PaymentDate); // Use the potentially updated date
     const oldYear = originalPaymentDate.getFullYear();
     const oldMonth = originalPaymentDate.getMonth() + 1;
     const newYear = newPaymentDate.getFullYear();
@@ -390,7 +486,7 @@ exports.updatePayment = async (req, res) => {
       await updateFinancialStatementForMonth(newYear, newMonth, transaction);
     }
 
-    // 5. Update all subsequent Financial Statements within the same transaction
+    // 5. Update all subsequent Global Financial Statements within the same transaction
     try {
       // Determine the earliest start date of the affected primary months
       const firstAffectedDate =
@@ -409,7 +505,7 @@ exports.updatePayment = async (req, res) => {
       });
 
       console.log(
-        `Found ${subsequentStatements.length} subsequent statements to update after edit.`
+        `Found ${subsequentStatements.length} subsequent global statements to update after edit.`
       );
 
       // Recalculate each subsequent statement
@@ -417,7 +513,7 @@ exports.updatePayment = async (req, res) => {
         const statementYear = statement.StartDate.getFullYear();
         const statementMonth = statement.StartDate.getMonth() + 1;
         console.log(
-          `Updating subsequent statement for ${statementMonth}/${statementYear}`
+          `Updating subsequent global statement for ${statementMonth}/${statementYear}`
         );
         // Pass the existing transaction
         await updateFinancialStatementForMonth(
@@ -428,11 +524,69 @@ exports.updatePayment = async (req, res) => {
       }
     } catch (cascadeError) {
       console.error(
-        "Error during subsequent financial statement updates after edit:",
+        "Error during subsequent global financial statement updates after edit:",
         cascadeError
       );
       // Let the main error handler catch and rollback
       throw cascadeError;
+    }
+
+    // --- NEW: Update Patient Monthly Statements ---
+    console.log(
+      `Triggering monthly statement update for patient ${patientId} due to payment update.`
+    );
+    await updateMonthlyStatementForMonth(
+      patientId,
+      oldYear,
+      oldMonth,
+      transaction
+    );
+    if (oldYear !== newYear || oldMonth !== newMonth) {
+      await updateMonthlyStatementForMonth(
+        patientId,
+        newYear,
+        newMonth,
+        transaction
+      );
+    }
+
+    // --- NEW: Cascade Update for Patient's Subsequent Monthly Statements ---
+    try {
+      const firstAffectedDate =
+        originalPaymentDate < newPaymentDate
+          ? originalPaymentDate
+          : newPaymentDate;
+      const firstAffectedMonthStart = startOfMonth(firstAffectedDate);
+      const subsequentPatientStatements = await MonthlyStatement.findAll({
+        where: {
+          PatientId: patientId, // Specific to this patient
+          StartDate: { [Op.gt]: firstAffectedMonthStart },
+        },
+        order: [["StartDate", "ASC"]],
+        transaction,
+      });
+      console.log(
+        `Found ${subsequentPatientStatements.length} subsequent monthly statements for patient ${patientId} to update after edit.`
+      );
+      for (const statement of subsequentPatientStatements) {
+        const statementYear = statement.StartDate.getFullYear();
+        const statementMonth = statement.StartDate.getMonth() + 1;
+        console.log(
+          `Updating subsequent monthly statement for patient ${patientId} - ${statementMonth}/${statementYear}`
+        );
+        await updateMonthlyStatementForMonth(
+          patientId,
+          statementYear,
+          statementMonth,
+          transaction
+        );
+      }
+    } catch (cascadeError) {
+      console.error(
+        `Error during subsequent patient monthly statement updates (update):`,
+        cascadeError
+      );
+      throw cascadeError; // Ensure transaction rollback
     }
 
     await transaction.commit(); // Commit the transaction
@@ -473,9 +627,11 @@ exports.deletePayment = async (req, res) => {
 
     const invoiceIdToDeleteFrom = payment.InvoiceId; // Store the InvoiceId before deleting
     const paymentDateToDelete = new Date(payment.PaymentDate); // Store payment date as Date object
+    const patientId = payment.PatientId; // Get patient ID
 
     // 2. Delete the Payment record
     await payment.destroy({ transaction });
+    console.log(`Payment ${paymentId} deleted.`);
 
     // 3. Recalculate and Update the associated Invoice AmountPaid and Status
     const paymentSumResult = await Payment.findAll({
@@ -518,12 +674,24 @@ exports.deletePayment = async (req, res) => {
     }
     // TODO: Consider 'overdue' logic if applicable
 
-    await Invoice.update(
-      { AmountPaid: totalPaid.toFixed(2), Status: newStatus },
-      { where: { id: invoiceIdToDeleteFrom }, transaction }
-    );
+    if (
+      invoice.Status !== newStatus ||
+      parseFloat(invoice.AmountPaid) !== totalPaid
+    ) {
+      await Invoice.update(
+        { AmountPaid: totalPaid.toFixed(2), Status: newStatus },
+        { where: { id: invoiceIdToDeleteFrom }, transaction }
+      );
+      console.log(
+        `Invoice ${invoiceIdToDeleteFrom} status/amount updated after delete.`
+      );
+    } else {
+      console.log(
+        `No change needed for Invoice ${invoiceIdToDeleteFrom} status/amount after delete.`
+      );
+    }
 
-    // 4. Update Financial Statement for the payment month
+    // 4. Update Global Financial Statement for the payment month
     const deletedPaymentYear = paymentDateToDelete.getFullYear();
     const deletedPaymentMonth = paymentDateToDelete.getMonth() + 1;
     await updateFinancialStatementForMonth(
@@ -532,7 +700,7 @@ exports.deletePayment = async (req, res) => {
       transaction
     );
 
-    // 5. Update all subsequent Financial Statements within the same transaction
+    // 5. Update all subsequent Global Financial Statements within the same transaction
     try {
       const deletedPaymentMonthStart = startOfMonth(paymentDateToDelete);
 
@@ -546,7 +714,7 @@ exports.deletePayment = async (req, res) => {
       });
 
       console.log(
-        `Found ${subsequentStatements.length} subsequent statements to update after delete.`
+        `Found ${subsequentStatements.length} subsequent global statements to update after delete.`
       );
 
       // Recalculate each subsequent statement
@@ -554,7 +722,7 @@ exports.deletePayment = async (req, res) => {
         const statementYear = statement.StartDate.getFullYear();
         const statementMonth = statement.StartDate.getMonth() + 1;
         console.log(
-          `Updating subsequent statement for ${statementMonth}/${statementYear}`
+          `Updating subsequent global statement for ${statementMonth}/${statementYear}`
         );
         // Pass the existing transaction
         await updateFinancialStatementForMonth(
@@ -565,11 +733,57 @@ exports.deletePayment = async (req, res) => {
       }
     } catch (cascadeError) {
       console.error(
-        "Error during subsequent financial statement updates after delete:",
+        "Error during subsequent global financial statement updates after delete:",
         cascadeError
       );
       // Let the main error handler catch and rollback
       throw cascadeError;
+    }
+
+    // --- NEW: Update Patient Monthly Statement ---
+    console.log(
+      `Triggering monthly statement update for patient ${patientId} due to payment deletion.`
+    );
+    await updateMonthlyStatementForMonth(
+      patientId,
+      deletedPaymentYear,
+      deletedPaymentMonth,
+      transaction
+    );
+
+    // --- NEW: Cascade Update for Patient's Subsequent Monthly Statements ---
+    try {
+      const deletedPaymentMonthStart = startOfMonth(paymentDateToDelete);
+      const subsequentPatientStatements = await MonthlyStatement.findAll({
+        where: {
+          PatientId: patientId, // Specific to this patient
+          StartDate: { [Op.gt]: deletedPaymentMonthStart },
+        },
+        order: [["StartDate", "ASC"]],
+        transaction,
+      });
+      console.log(
+        `Found ${subsequentPatientStatements.length} subsequent monthly statements for patient ${patientId} to update after delete.`
+      );
+      for (const statement of subsequentPatientStatements) {
+        const statementYear = statement.StartDate.getFullYear();
+        const statementMonth = statement.StartDate.getMonth() + 1;
+        console.log(
+          `Updating subsequent monthly statement for patient ${patientId} - ${statementMonth}/${statementYear}`
+        );
+        await updateMonthlyStatementForMonth(
+          patientId,
+          statementYear,
+          statementMonth,
+          transaction
+        );
+      }
+    } catch (cascadeError) {
+      console.error(
+        `Error during subsequent patient monthly statement updates (delete):`,
+        cascadeError
+      );
+      throw cascadeError; // Ensure transaction rollback
     }
 
     await transaction.commit(); // Commit the transaction

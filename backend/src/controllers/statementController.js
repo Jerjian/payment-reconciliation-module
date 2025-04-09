@@ -1,5 +1,5 @@
 const db = require("../models");
-const { MonthlyStatement, FinancialStatement } = db;
+const { MonthlyStatement, FinancialStatement, Invoice, Payment } = db;
 const { Op } = require("sequelize");
 const {
   startOfMonth,
@@ -48,9 +48,10 @@ exports.getFinancialStatements = async (req, res) => {
         const endOfMonthDate = endOfMonth(startOfMonthDate);
         // Query based on statement's EndDate falling within the month
         whereClause = {
-          EndDate: {
-            [Op.between]: [startOfMonthDate, endOfMonthDate],
-          },
+          // EndDate: {
+          //   [Op.between]: [startOfMonthDate, endOfMonthDate],
+          // },
+          StartDate: startOfMonthDate, // Query by StartDate instead
         };
         periodStr = `${month}/${targetYear}`;
       }
@@ -59,11 +60,12 @@ exports.getFinancialStatements = async (req, res) => {
       if (isValid(parsedStartDate)) {
         // Check if date is valid
         const startOfMonthDate = startOfMonth(parsedStartDate);
-        const endOfMonthDate = endOfMonth(startOfMonthDate);
+        // const endOfMonthDate = endOfMonth(startOfMonthDate); // Not needed for query
         whereClause = {
-          EndDate: {
-            [Op.between]: [startOfMonthDate, endOfMonthDate],
-          },
+          // EndDate: {
+          //   [Op.between]: [startOfMonthDate, endOfMonthDate],
+          // },
+          StartDate: startOfMonthDate, // Query by StartDate
         };
         periodStr = `the month starting ${format(
           startOfMonthDate,
@@ -84,10 +86,6 @@ exports.getFinancialStatements = async (req, res) => {
     if (!statement) {
       return res.status(404).json({
         message: `No financial statement found for ${periodStr}.`,
-        // Optionally return default zero object if preferred over 404
-        // StatementDate: null, StartDate: null, EndDate: null,
-        // TotalRevenue: "0.00", InsurancePayments: "0.00",
-        // PatientPayments: "0.00", OutstandingBalance: "0.00"
       });
     }
 
@@ -109,42 +107,31 @@ exports.getMonthlyStatementsForPatient = async (req, res) => {
       return res.status(400).json({ message: "Invalid patient ID format." });
     }
 
-    const statements = [];
-    const currentDate = new Date();
-    const numberOfMonths = 12; // Calculate for the last 12 months including current
+    console.log(`Fetching stored monthly statements for Patient ${patientId}`);
 
-    // Loop backwards from the current month for the last N months
-    for (let i = 0; i < numberOfMonths; i++) {
-      const targetMonthDate = subMonths(currentDate, i);
-      const startDate = startOfMonth(targetMonthDate);
-      const endDate = endOfMonth(targetMonthDate);
+    // Read directly from the MonthlyStatement table
+    const statements = await MonthlyStatement.findAll({
+      where: { PatientId: patientId },
+      order: [["StartDate", "DESC"]], // Order by period start date, newest first
+      limit: 12, // Optionally limit to the last 12 stored statements
+    });
 
+    if (!statements || statements.length === 0) {
       console.log(
-        `Calculating statement for patient ${patientId} - ${format(
-          targetMonthDate,
-          "yyyy-MM"
-        )}`
+        `No stored monthly statements found for Patient ${patientId}.`
       );
-
-      // Calculate statement data in real-time using the helper
-      // Note: calculateStatementData needs access to db models
-      const statementData = await calculateStatementData(
-        patientId,
-        startDate,
-        endDate
-      );
-      statements.push(statementData);
+      // Return empty array or 404 based on preference
+      // return res.status(404).json({ message: "No monthly statements found for this patient." });
     }
 
-    // Statements will be ordered newest month first due to loop direction
-    // If you want oldest first, you can reverse the loop or sort the array:
-    // statements.sort((a, b) => a.StartDate - b.StartDate);
-
-    res.status(200).json(statements);
+    res.status(200).json(statements); // Return the stored statements
   } catch (error) {
-    console.error("Error calculating monthly statements for patient:", error);
+    console.error(
+      "Error fetching stored monthly statements for patient:",
+      error
+    );
     res.status(500).json({
-      message: "Error calculating monthly statements",
+      message: "Error fetching monthly statements",
       error: error.message,
     });
   }
@@ -196,10 +183,14 @@ exports.getMonthlyStatementForPatientByMonth = async (req, res) => {
 };
 
 // Helper function to calculate statement data for a patient and period
-async function calculateStatementData(patientId, startDate, endDate) {
+async function calculateStatementData(
+  patientId,
+  startDate,
+  endDate,
+  transaction = null
+) {
   // 1. Calculate Opening Balance dynamically
-  // Sum of all patient portions for invoices BEFORE startDate
-  const priorChargesResult = await db.Invoice.findOne({
+  const priorChargesResult = await Invoice.findOne({
     attributes: [
       [
         db.sequelize.fn("SUM", db.sequelize.col("PatientPortion")),
@@ -211,13 +202,13 @@ async function calculateStatementData(patientId, startDate, endDate) {
       InvoiceDate: { [Op.lt]: startDate }, // Invoices dated *before* the start date
     },
     raw: true,
+    transaction, // Pass transaction
   });
   const totalPriorCharges = parseFloat(
-    priorChargesResult.totalPriorCharges || 0
+    priorChargesResult?.totalPriorCharges || 0
   );
 
-  // Sum of all payments (net refunds) BEFORE startDate
-  const priorPaymentRecords = await db.Payment.findAll({
+  const priorPaymentRecords = await Payment.findAll({
     attributes: ["Amount", "isRefund"],
     where: {
       PatientId: patientId,
@@ -225,6 +216,7 @@ async function calculateStatementData(patientId, startDate, endDate) {
       TransactionStatus: "completed",
     },
     raw: true,
+    transaction, // Pass transaction
   });
   const totalPriorPayments = priorPaymentRecords.reduce((sum, p) => {
     const paymentAmount = parseFloat(p.Amount || 0);
@@ -234,7 +226,7 @@ async function calculateStatementData(patientId, startDate, endDate) {
   const openingBalance = totalPriorCharges - totalPriorPayments;
 
   // 2. Calculate Total Charges (Sum of PatientPortion for invoices dated within the month)
-  const chargesResult = await db.Invoice.findOne({
+  const chargesResult = await Invoice.findOne({
     attributes: [
       [
         db.sequelize.fn("SUM", db.sequelize.col("PatientPortion")),
@@ -246,11 +238,12 @@ async function calculateStatementData(patientId, startDate, endDate) {
       InvoiceDate: { [Op.between]: [startDate, endDate] },
     },
     raw: true,
+    transaction, // Pass transaction
   });
-  const totalCharges = parseFloat(chargesResult.totalCharges || 0);
+  const totalCharges = parseFloat(chargesResult?.totalCharges || 0);
 
   // 3. Calculate Total Payments (Sum of payments - refunds dated within the month)
-  const paymentRecords = await db.Payment.findAll({
+  const paymentRecords = await Payment.findAll({
     attributes: ["Amount", "isRefund"],
     where: {
       PatientId: patientId,
@@ -258,7 +251,7 @@ async function calculateStatementData(patientId, startDate, endDate) {
       TransactionStatus: "completed",
     },
     raw: true,
-    // No transaction needed here as this is a read-only calculation for display
+    transaction, // Pass transaction
   });
   const totalPayments = paymentRecords.reduce((sum, p) => {
     const paymentAmount = parseFloat(p.Amount || 0);
@@ -277,12 +270,115 @@ async function calculateStatementData(patientId, startDate, endDate) {
     TotalCharges: totalCharges.toFixed(2),
     TotalPayments: totalPayments.toFixed(2),
     ClosingBalance: closingBalance.toFixed(2),
+    // Ensure createdAt/updatedAt are handled by Sequelize defaults or excluded here
+    // if they are part of the returned object unintentionally.
   };
+}
+
+// Helper function to calculate and upsert monthly statement data for a patient and period
+// This function will be EXPORTED
+async function updateMonthlyStatementForMonth(
+  patientId,
+  year,
+  month,
+  transaction
+) {
+  if (
+    isNaN(patientId) ||
+    isNaN(year) ||
+    isNaN(month) ||
+    month < 1 ||
+    month > 12
+  ) {
+    console.error(
+      `Invalid patientId (${patientId}), year (${year}), or month (${month}) for monthly statement update.`
+    );
+    // Decide if we should throw or just return to avoid breaking the transaction
+    // For now, just log and return. Throw error if this should halt the process.
+    // throw new Error('Invalid input for updateMonthlyStatementForMonth');
+    return;
+  }
+
+  const startDate = startOfMonth(new Date(year, month - 1, 1));
+  const endDate = endOfMonth(startDate);
+
+  console.log(
+    `Updating monthly statement for Patient ${patientId} - ${format(
+      startDate,
+      "yyyy-MM"
+    )}`
+  );
+
+  try {
+    // Pass the transaction to the calculation function
+    const statementData = await calculateStatementData(
+      patientId,
+      startDate,
+      endDate,
+      transaction
+    );
+
+    // Perform an Upsert operation within the transaction
+    // Find existing or build new is safer than relying purely on upsert PK behavior across DBs
+    let [statement, created] = await MonthlyStatement.findOrCreate({
+      where: {
+        PatientId: patientId,
+        StartDate: startDate,
+        // EndDate: endDate, // Using StartDate as the unique key for the period is safer
+      },
+      defaults: {
+        // Provide defaults without PK or potentially conflicting fields like id/createdAt
+        PatientId: statementData.PatientId,
+        StatementDate: statementData.StatementDate,
+        StartDate: statementData.StartDate,
+        EndDate: statementData.EndDate,
+        OpeningBalance: statementData.OpeningBalance,
+        TotalCharges: statementData.TotalCharges,
+        TotalPayments: statementData.TotalPayments,
+        ClosingBalance: statementData.ClosingBalance,
+      },
+      transaction: transaction,
+    });
+
+    if (!created) {
+      // If it existed, update it with the latest calculated data, excluding PK/timestamps
+      await statement.update(
+        {
+          OpeningBalance: statementData.OpeningBalance,
+          TotalCharges: statementData.TotalCharges,
+          TotalPayments: statementData.TotalPayments,
+          ClosingBalance: statementData.ClosingBalance,
+          StatementDate: statementData.StatementDate, // Update statement date too if needed
+          EndDate: statementData.EndDate, // Ensure EndDate is also updated
+        },
+        { transaction: transaction }
+      );
+      console.log(
+        `Updated existing monthly statement for Patient ${patientId} - ${format(
+          startDate,
+          "yyyy-MM"
+        )}`
+      );
+    } else {
+      console.log(
+        `Created new monthly statement for Patient ${patientId} - ${format(
+          startDate,
+          "yyyy-MM"
+        )}`
+      );
+    }
+  } catch (error) {
+    console.error(
+      `Error calculating/upserting monthly statement for Patient ${patientId} (${year}-${month}):`,
+      error
+    );
+    // Re-throw the error to ensure the transaction is rolled back
+    throw error;
+  }
 }
 
 // Helper function to calculate global financial statement data for a period
 async function calculateFinancialStatementData(startDate, endDate) {
-  // 1. Calculate Total Revenue (Sum of Invoice.Amount for invoices IN the period)
   const revenueResult = await db.Invoice.findOne({
     attributes: [
       [db.sequelize.fn("SUM", db.sequelize.col("Amount")), "totalRevenue"],
@@ -292,10 +388,9 @@ async function calculateFinancialStatementData(startDate, endDate) {
     },
     raw: true,
   });
-  const totalRevenue = parseFloat(revenueResult.totalRevenue || 0);
+  const totalRevenue = parseFloat(revenueResult?.totalRevenue || 0); // Use optional chaining
 
-  // 2. Calculate Total Insurance Payments (Sum of Invoice.InsuranceCoveredAmount for invoices IN the period)
-  //    Alternatively, could sum KrollRxPrescriptionPlanAdj.PlanPays if Invoice field is unreliable
+  // 2. Calculate Total Insurance Payments
   const insuranceResult = await db.Invoice.findOne({
     attributes: [
       [
@@ -309,60 +404,59 @@ async function calculateFinancialStatementData(startDate, endDate) {
     raw: true,
   });
   const totalInsurancePayments = parseFloat(
-    insuranceResult.totalInsurance || 0
+    insuranceResult?.totalInsurance || 0 // Use optional chaining
   );
 
-  // 3. Calculate Total Patient Payments (Sum of completed Payment.Amount for payments IN the period)
-  const patientPaymentsResult = await db.Payment.findOne({
-    attributes: [
-      [
-        db.sequelize.fn("SUM", db.sequelize.col("Amount")),
-        "totalPatientPayments",
-      ],
-    ],
+  // 3. Calculate Total Patient Payments (Net Refunds) IN the period
+  const patientPaymentsRecords = await db.Payment.findAll({
+    attributes: ["Amount", "isRefund"],
     where: {
       PaymentDate: { [Op.between]: [startDate, endDate] },
       TransactionStatus: "completed",
     },
     raw: true,
   });
-  const totalPatientPayments = parseFloat(
-    patientPaymentsResult.totalPatientPayments || 0
-  );
+  const totalPatientPayments = patientPaymentsRecords.reduce((sum, p) => {
+    const paymentAmount = parseFloat(p.Amount || 0);
+    return sum + (p.isRefund ? -paymentAmount : paymentAmount);
+  }, 0);
 
-  // 4. Calculate Outstanding Balance (Sum of PatientPortion - AmountPaid for ALL non-paid invoices as of endDate)
-  //    This is trickier - it's not just for the period, but the total outstanding *at the end* of the period.
-  //    Let's calculate the sum of (PatientPortion - AmountPaid) for all invoices NOT fully paid.
-  //    NOTE: This might not perfectly match a true Accounts Receivable calculation which involves aging.
+  // 4. Calculate Outstanding Balance as of endDate
   const outstandingResult = await db.Invoice.findOne({
     attributes: [
       [
         db.sequelize.fn(
           "SUM",
+          // Ensure correct casting for subtraction across different DB types
           db.sequelize.literal(
-            "CAST(PatientPortion AS REAL) - CAST(AmountPaid AS REAL)"
+            "CAST(COALESCE(PatientPortion, 0) AS DECIMAL(10,2)) - CAST(COALESCE(AmountPaid, 0) AS DECIMAL(10,2))"
           )
         ),
         "totalOutstanding",
       ],
     ],
     where: {
-      // Find invoices created on or before the endDate that are not fully paid
       InvoiceDate: { [Op.lte]: endDate },
-      Status: { [Op.notIn]: ["paid"] }, // Exclude fully paid invoices
-      // Add other statuses to exclude if necessary (e.g., 'cancelled', 'written_off')
+      Status: { [Op.notIn]: ["paid"] },
     },
     raw: true,
   });
-  const totalOutstanding = parseFloat(outstandingResult.totalOutstanding || 0);
+  // Ensure outstanding is not negative
+  const totalOutstanding = Math.max(
+    0,
+    parseFloat(outstandingResult?.totalOutstanding || 0)
+  );
 
   return {
-    StatementDate: endDate, // Use end date as statement date
+    StatementDate: endDate,
     StartDate: startDate,
     EndDate: endDate,
     TotalRevenue: totalRevenue.toFixed(2),
     InsurancePayments: totalInsurancePayments.toFixed(2),
     PatientPayments: totalPatientPayments.toFixed(2),
-    OutstandingBalance: totalOutstanding.toFixed(2), // Reflects balance at the END of the period
+    OutstandingBalance: totalOutstanding.toFixed(2),
   };
 }
+
+// Export the new helper function
+module.exports.updateMonthlyStatementForMonth = updateMonthlyStatementForMonth;

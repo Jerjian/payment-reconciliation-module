@@ -1,6 +1,114 @@
 const db = require("../models");
-const { Payment, Invoice } = db;
+const { Payment, Invoice, FinancialStatement } = db;
 const { Op } = require("sequelize"); // Import Op for summation
+const { startOfMonth, endOfMonth, parseISO, isValid } = require("date-fns"); // Add date-fns
+
+// Helper function to update financial statement for a given month
+// (Copied and adapted from statementController - needs transaction param)
+async function updateFinancialStatementForMonth(year, month, transaction) {
+  if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+    console.error(
+      `Invalid year (${year}) or month (${month}) provided for financial statement update.`
+    );
+    return; // Or throw an error
+  }
+  const startDate = new Date(year, month - 1, 1);
+  const endDate = endOfMonth(startDate);
+
+  try {
+    // Use the calculation logic (similar to the controller helper)
+    const revenueResult = await Invoice.findOne({
+      attributes: [
+        [db.sequelize.fn("SUM", db.sequelize.col("Amount")), "totalRevenue"],
+      ],
+      where: { InvoiceDate: { [Op.between]: [startDate, endDate] } },
+      transaction,
+      raw: true,
+    });
+    const insuranceResult = await Invoice.findOne({
+      attributes: [
+        [
+          db.sequelize.fn("SUM", db.sequelize.col("InsuranceCoveredAmount")),
+          "totalInsurance",
+        ],
+      ],
+      where: { InvoiceDate: { [Op.between]: [startDate, endDate] } },
+      transaction,
+      raw: true,
+    });
+    // Sum payments considering refunds within the period
+    const paymentSumResult = await Payment.findAll({
+      attributes: ["Amount", "isRefund"],
+      where: {
+        PaymentDate: { [Op.between]: [startDate, endDate] },
+        TransactionStatus: "completed",
+      },
+      raw: true,
+      transaction,
+    });
+    const totalPatientPayments = paymentSumResult.reduce((sum, p) => {
+      const paymentAmount = parseFloat(p.Amount || 0);
+      return sum + (p.isRefund ? -paymentAmount : paymentAmount);
+    }, 0);
+
+    // Outstanding balance calculation (Simplified: total patient portion minus total paid for invoices *up to* end date)
+    const outstandingInvoices = await Invoice.findAll({
+      attributes: ["PatientPortion", "AmountPaid"],
+      where: {
+        InvoiceDate: { [Op.lte]: endDate }, // Invoices up to the end of the month
+        Status: { [Op.notIn]: ["paid"] }, // Not fully paid
+      },
+      transaction,
+      raw: true,
+    });
+    const totalOutstanding = outstandingInvoices.reduce((sum, inv) => {
+      const patientPortion = parseFloat(inv.PatientPortion || 0);
+      const amountPaid = parseFloat(inv.AmountPaid || 0);
+      return sum + (patientPortion - amountPaid);
+    }, 0.0);
+
+    const statementData = {
+      StatementDate: endDate,
+      StartDate: startDate,
+      EndDate: endDate,
+      TotalRevenue: parseFloat(revenueResult?.totalRevenue || 0).toFixed(2),
+      InsurancePayments: parseFloat(
+        insuranceResult?.totalInsurance || 0
+      ).toFixed(2),
+      PatientPayments: totalPatientPayments.toFixed(2),
+      OutstandingBalance: Math.max(0, totalOutstanding).toFixed(2), // Ensure non-negative balance
+    };
+
+    // Upsert the record for the month
+    // Find existing or build new - necessary because upsert might not work perfectly across dialects or without PK
+    let existingStatement = await FinancialStatement.findOne({
+      where: {
+        StartDate: startDate,
+        EndDate: endDate,
+      },
+      transaction,
+    });
+
+    if (existingStatement) {
+      await FinancialStatement.update(statementData, {
+        where: { id: existingStatement.id },
+        transaction,
+      });
+      console.log(`Updated financial statement for ${month}/${year}`);
+    } else {
+      await FinancialStatement.create(statementData, { transaction });
+      console.log(`Created financial statement for ${month}/${year}`);
+    }
+  } catch (error) {
+    console.error(
+      `Error calculating/upserting financial statement for ${month}/${year}:`,
+      error
+    );
+    // Decide if this error should cause the main transaction to rollback
+    // For now, we log it but allow the payment operation to succeed potentially
+    // To force rollback, re-throw the error here: throw error;
+  }
+}
 
 // Create a new payment record
 exports.createPayment = async (req, res) => {
@@ -89,6 +197,16 @@ exports.createPayment = async (req, res) => {
       { where: { id: invoiceId }, transaction }
     );
 
+    // 4. Update Financial Statement for the payment month
+    const paymentDateObj = new Date(paymentDate);
+    const paymentYear = paymentDateObj.getFullYear();
+    const paymentMonth = paymentDateObj.getMonth() + 1; // getMonth() is 0-indexed
+    await updateFinancialStatementForMonth(
+      paymentYear,
+      paymentMonth,
+      transaction
+    );
+
     await transaction.commit(); // Commit the transaction
 
     // Fetch the newly created payment again *outside* the transaction to return fresh data
@@ -155,6 +273,7 @@ exports.updatePayment = async (req, res) => {
 
     // Store the original invoiceId before potential update
     const originalInvoiceId = payment.InvoiceId;
+    const originalPaymentDate = payment.PaymentDate; // Store original date
 
     // 2. Update the Payment record fields selectively
     if (absAmount !== undefined) payment.Amount = absAmount;
@@ -211,6 +330,20 @@ exports.updatePayment = async (req, res) => {
       { where: { id: originalInvoiceId }, transaction }
     );
 
+    // 4. Update Financial Statements for affected months
+    const newPaymentDate = payment.PaymentDate; // Get potentially updated date
+    const oldYear = originalPaymentDate.getFullYear();
+    const oldMonth = originalPaymentDate.getMonth() + 1;
+    const newYear = newPaymentDate.getFullYear();
+    const newMonth = newPaymentDate.getMonth() + 1;
+
+    // Update the statement for the original month
+    await updateFinancialStatementForMonth(oldYear, oldMonth, transaction);
+    // If the month/year changed, update the new month's statement as well
+    if (oldYear !== newYear || oldMonth !== newMonth) {
+      await updateFinancialStatementForMonth(newYear, newMonth, transaction);
+    }
+
     await transaction.commit(); // Commit the transaction
 
     // Fetch the updated payment record again to return the final state
@@ -248,6 +381,7 @@ exports.deletePayment = async (req, res) => {
     }
 
     const invoiceIdToDeleteFrom = payment.InvoiceId; // Store the InvoiceId before deleting
+    const paymentDateToDelete = payment.PaymentDate; // Store payment date
 
     // 2. Delete the Payment record
     await payment.destroy({ transaction });
@@ -296,6 +430,15 @@ exports.deletePayment = async (req, res) => {
     await Invoice.update(
       { AmountPaid: totalPaid.toFixed(2), Status: newStatus },
       { where: { id: invoiceIdToDeleteFrom }, transaction }
+    );
+
+    // 4. Update Financial Statement for the payment month
+    const deletedPaymentYear = paymentDateToDelete.getFullYear();
+    const deletedPaymentMonth = paymentDateToDelete.getMonth() + 1;
+    await updateFinancialStatementForMonth(
+      deletedPaymentYear,
+      deletedPaymentMonth,
+      transaction
     );
 
     await transaction.commit(); // Commit the transaction

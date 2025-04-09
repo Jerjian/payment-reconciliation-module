@@ -125,14 +125,21 @@ export class ApiService {
 
   // Method to get the financial statement
   getFinancialStatement(
-    year?: number,
-    month?: number
+    year: number,
+    month: number // Month is required again
   ): Observable<FinancialStatementData> {
     let params: { [param: string]: string } = {};
     if (year !== undefined && month !== undefined) {
+      // Always construct start date for the month
       const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
-      params['startDate'] = startDate;
+      params['startDate'] = startDate; // Backend expects startDate for monthly view
+    } else {
+      // Handle error or default case if year/month somehow missing
+      console.error('getFinancialStatement called without year or month.');
+      // Optionally return an error observable or fetch latest by sending no params
+      // return throwError(() => new Error('Year and month are required'));
     }
+
     return this.http.get<FinancialStatementData>(
       `${this.apiUrl}/statements/financial`,
       { params }

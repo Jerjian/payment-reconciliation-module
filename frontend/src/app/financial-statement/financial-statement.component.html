@@ -7,12 +7,18 @@
     <h1>Financial Statement</h1>
     <!-- Period Selectors -->
     <div class="period-selectors">
-      <select [(ngModel)]="selectedMonth" title="Select Month">
+      <label for="month-select">Month:</label>
+      <select
+        id="month-select"
+        [(ngModel)]="selectedMonth"
+        title="Select Month"
+      >
         <option *ngFor="let month of availableMonths" [value]="month.value">
           {{ month.name }}
         </option>
       </select>
-      <select [(ngModel)]="selectedYear" title="Select Year">
+      <label for="year-select">Year:</label>
+      <select id="year-select" [(ngModel)]="selectedYear" title="Select Year">
         <option *ngFor="let year of availableYears" [value]="year">
           {{ year }}
         </option>
@@ -41,6 +47,7 @@
         </span>
         <span *ngIf="!statement.StartDate || !statement.EndDate">
           {{ selectedMonth | number : "2.0" }}-{{ selectedYear }}
+          <!-- Fallback to selected month/year -->
         </span>
       </h2>
 
@@ -64,7 +71,7 @@
           }}</span>
         </div>
         <div>
-          <label>Total Outstanding Balance (AR)</label>
+          <label>Total Outstanding Balance (Month End)</label>
           <span class="outstanding-balance">{{
             statement.OutstandingBalance | currency : "USD" : "symbol"
           }}</span>

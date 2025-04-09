@@ -4,7 +4,13 @@ import { Router, RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ApiService, FinancialStatementData } from '../services/api.service';
 import { Observable, of, BehaviorSubject, combineLatest } from 'rxjs';
-import { catchError, switchMap, tap, finalize } from 'rxjs/operators';
+import {
+  catchError,
+  switchMap,
+  tap,
+  finalize,
+  distinctUntilChanged,
+} from 'rxjs/operators';
 
 @Component({
   selector: 'app-financial-statement',
@@ -55,23 +61,31 @@ export class FinancialStatementComponent implements OnInit {
     this.populateYears();
 
     this.statementData$ = combineLatest([
-      this.selectedYearSubject,
-      this.selectedMonthSubject,
+      this.selectedYearSubject.pipe(distinctUntilChanged()),
+      this.selectedMonthSubject.pipe(distinctUntilChanged()),
     ]).pipe(
       tap(() => {
-        this.isLoading = true;
-        this.error = null;
+        setTimeout(() => {
+          this.isLoading = true;
+          this.error = null;
+        }, 0);
       }),
       switchMap(([year, month]) =>
         this.apiService.getFinancialStatement(year, month).pipe(
           catchError((err) => {
             console.error('Error loading financial statement:', err);
-            this.error = `Failed to load financial statement for ${month}/${year}: ${
-              err.message || 'Unknown error'
-            }`;
+            setTimeout(() => {
+              this.error = `Failed to load financial statement for ${month}/${year}: ${
+                err.message || 'Unknown error'
+              }`;
+            }, 0);
             return of(null);
           }),
-          finalize(() => (this.isLoading = false))
+          finalize(() => {
+            setTimeout(() => {
+              this.isLoading = false;
+            }, 0);
+          })
         )
       )
     );
@@ -81,7 +95,7 @@ export class FinancialStatementComponent implements OnInit {
 
   populateYears(): void {
     const currentYear = new Date().getFullYear();
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 10; i++) {
       this.availableYears.push(currentYear - i);
     }
   }

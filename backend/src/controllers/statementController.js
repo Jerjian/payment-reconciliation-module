@@ -33,6 +33,7 @@ exports.getFinancialStatements = async (req, res) => {
   try {
     let whereClause = {};
     const { year, month, startDate } = req.query; // Accept year/month or startDate
+    let periodStr = "the requested period";
 
     if (year && month) {
       const targetMonth = parseInt(month, 10);
@@ -46,12 +47,12 @@ exports.getFinancialStatements = async (req, res) => {
         const startOfMonthDate = new Date(targetYear, targetMonth - 1, 1);
         const endOfMonthDate = endOfMonth(startOfMonthDate);
         // Query based on statement's EndDate falling within the month
-        // Adjust if your table stores year/month columns directly
         whereClause = {
           EndDate: {
             [Op.between]: [startOfMonthDate, endOfMonthDate],
           },
         };
+        periodStr = `${month}/${targetYear}`;
       }
     } else if (startDate) {
       const parsedStartDate = parseISO(startDate);
@@ -64,7 +65,14 @@ exports.getFinancialStatements = async (req, res) => {
             [Op.between]: [startOfMonthDate, endOfMonthDate],
           },
         };
+        periodStr = `the month starting ${format(
+          startOfMonthDate,
+          "yyyy-MM-dd"
+        )}`;
       }
+    } else {
+      // If no specific period, find the latest statement
+      periodStr = "the latest available period";
     }
 
     // Find the statement matching the criteria, or the latest if no criteria
@@ -74,8 +82,6 @@ exports.getFinancialStatements = async (req, res) => {
     });
 
     if (!statement) {
-      const periodStr =
-        year && month ? `${month}/${year}` : "the requested period";
       return res.status(404).json({
         message: `No financial statement found for ${periodStr}.`,
         // Optionally return default zero object if preferred over 404

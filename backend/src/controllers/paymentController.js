@@ -129,10 +129,18 @@ exports.createPayment = async (req, res) => {
         "Missing required payment fields: invoiceId, amount, paymentDate, paymentMethod.",
     });
   }
-  const absAmount = Math.abs(parseFloat(amount));
-  if (isNaN(absAmount) || absAmount <= 0) {
-    return res.status(400).json({ message: "Invalid amount format or value." });
+  // Parse amount and ensure it's a positive number
+  const parsedAmount = parseFloat(amount);
+  if (isNaN(parsedAmount) || parsedAmount <= 0) {
+    // Check if not a number OR less than or equal to zero
+    return res
+      .status(400)
+      .json({
+        message: "Invalid amount format or value. Amount must be positive.",
+      });
   }
+
+  const absAmount = Math.abs(parsedAmount); // Store absolute amount for use
 
   const transaction = await db.sequelize.transaction(); // Start a transaction
 

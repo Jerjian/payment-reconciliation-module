@@ -72,6 +72,7 @@ The core of the reconciliation process revolves around the `Invoice` table:
 5.  **Statement Updates (`FinancialStatement` table):**
     - When a `Payment` is created, updated, or deleted, the backend automatically recalculates the relevant monthly totals (revenue, patient payments, outstanding balance) for the month the payment occurred in.
     - It then _updates_ the corresponding record in the `financial_statements` table for that specific month (StartDate/EndDate). This ensures the stored financial statement reflects the impact of payments.
+    - **Additionally:** The system also recalculates and updates the stored `FinancialStatement` records for **all subsequent months** within the same transaction to ensure the `OutstandingBalance` and other aggregates reflect the change chronologically.
 
 ## Setup Instructions
 
@@ -156,9 +157,9 @@ Follow these steps to set up the project on a new machine.
 - `GET /api/patients/:id`: Get details for a single patient.
 - `GET /api/patients/:id/account-statement`: Get patient details, prescription lines with current balances, and total balance.
 - `GET /api/patients/:patientId/prescriptions/:rxNum/details`: Get specific prescription details and a combined transaction history (insurance adjudications + patient payments/refunds).
-- `POST /api/payments`: Create a new patient payment or refund for an invoice. Updates invoice status. Updates financial statement.
-- `PUT /api/payments/:paymentId`: Update an existing payment or refund. Updates invoice status. Updates financial statement(s) for original and new payment months if changed.
-- `DELETE /api/payments/:paymentId`: Delete a payment or refund. Updates invoice status. Updates financial statement.
+- `POST /api/payments`: Create a new patient payment or refund for an invoice. Updates invoice status. Updates financial statement for the payment month and all subsequent months.
+- `PUT /api/payments/:paymentId`: Update an existing payment or refund. Updates invoice status. Updates financial statement(s) for original/new payment months and all subsequent months.
+- `DELETE /api/payments/:paymentId`: Delete a payment or refund. Updates invoice status. Updates financial statement for the payment month and all subsequent months.
 - `GET /api/statements/monthly/patient/:patientId`: Get calculated statement data (opening, charges, payments, closing) for the last 12 months for a patient.
 - `GET /api/statements/monthly/patient/:patientId/:year/:month`: Get calculated statement data for a specific month/year for a patient.
 - `GET /api/statements/financial?startDate=YYYY-MM-DD`: Get the stored financial statement record matching the period containing the `startDate`. (If no `startDate`, fetches the latest stored statement).
